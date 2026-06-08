@@ -1,0 +1,1260 @@
+<?php
+require_once 'includes/db.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+function e($value)
+{
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+}
+
+function accImagePath($imageUrl)
+{
+    $imageUrl = trim((string)$imageUrl);
+
+    if ($imageUrl === '') {
+        return 'images/no-image.png';
+    }
+
+    if (preg_match('/^https?:\/\//i', $imageUrl)) {
+        return $imageUrl;
+    }
+
+    if (strpos($imageUrl, '../') === 0) {
+        return substr($imageUrl, 3);
+    }
+
+    if (strpos($imageUrl, 'images/') === 0) {
+        return $imageUrl;
+    }
+
+    return 'images/' . $imageUrl;
+}
+
+function accFormatPrice($price)
+{
+    $price = (float)$price;
+
+    if ($price <= 0) {
+        return 'Price on request';
+    }
+
+    return '$' . number_format($price, 0);
+}
+
+function isPromoActive($item)
+{
+    if (empty($item['promo_enabled']) || (int)$item['promo_enabled'] !== 1) return false;
+    if (empty($item['promo_end_date'])) return false;
+    if (empty($item['discount_price']) || (float)$item['discount_price'] >= (float)$item['selling_price']) return false;
+
+    return strtotime($item['promo_end_date']) > time();
+}
+
+function formatPromoTimeLeft($endDate)
+{
+    $diff = strtotime($endDate) - time();
+
+    if ($diff <= 0) return 'Expired';
+
+    $days = floor($diff / 86400);
+    $hours = floor(($diff % 86400) / 3600);
+    $minutes = floor(($diff % 3600) / 60);
+
+    if ($days > 0) {
+        return $days . ' day' . ($days > 1 ? 's' : '') . ' ' . $hours . 'hr left';
+    }
+
+    if ($hours > 0) {
+        return $hours . 'hr ' . $minutes . 'min left';
+    }
+
+    return $minutes . ' min left';
+}
+
+function removeQueryParam($key)
+{
+    $query = $_GET;
+    unset($query[$key]);
+
+    $path = strtok($_SERVER['REQUEST_URI'], '?');
+    $queryString = http_build_query($query);
+
+    return $queryString ? $path . '?' . $queryString : $path;
+}
+
+$keyword  = trim($_GET['keyword']   ?? '');
+$category = trim($_GET['category']  ?? '');
+$minPrice = trim($_GET['min_price'] ?? '');
+$maxPrice = trim($_GET['max_price'] ?? '');
+
+$priceRangeOptions = [50, 100, 200, 500, 1000, 2000, 5000];
+
+$accCategories = [
+    'batteries'        => 'Batteries',
+    'tyres'            => 'Tyres',
+    'mechanical-parts' => 'Mechanical Parts',
+    'electrical-parts' => 'Electrical Parts',
+    'others'           => 'Others',
+];
+
+$where  = [];
+$params = [];
+
+$where[] = "status = 'active'";
+
+if ($keyword !== '') {
+    $where[] = "(
+        brand LIKE :keyword_brand
+        OR model LIKE :keyword_model
+        OR name LIKE :keyword_name
+        OR short_info LIKE :keyword_short_info
+        OR description LIKE :keyword_description
+    )";
+
+    $params[':keyword_brand']       = '%' . $keyword . '%';
+    $params[':keyword_model']       = '%' . $keyword . '%';
+    $params[':keyword_name']        = '%' . $keyword . '%';
+    $params[':keyword_short_info']  = '%' . $keyword . '%';
+    $params[':keyword_description'] = '%' . $keyword . '%';
+}
+
+if ($category !== '' && isset($accCategories[$category])) {
+    $where[] = "category = :category";
+    $params[':category'] = $accCategories[$category];
+}
+
+if ($minPrice !== '') {
+    $where[] = "selling_price >= :min_price";
+    $params[':min_price'] = (float)$minPrice;
+}
+
+if ($maxPrice !== '') {
+    $where[] = "selling_price <= :max_price";
+    $params[':max_price'] = (float)$maxPrice;
+}
+
+$whereSql = implode(' AND ', $where);
+
+/* Pagination */
+$page    = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 24;
+
+$countStmt = $pdo->prepare("SELECT COUNT(*) FROM accessories WHERE $whereSql");
+$countStmt->execute($params);
+$totalCount = (int)$countStmt->fetchColumn();
+$totalPages = max(1, (int)ceil($totalCount / $perPage));
+
+if ($page > $totalPages) $page = $totalPages;
+$offset = ($page - 1) * $perPage;
+
+$mainSql = "SELECT * FROM accessories WHERE $whereSql ORDER BY created_at DESC, id DESC LIMIT $perPage OFFSET $offset";
+$stmt = $pdo->prepare($mainSql);
+$stmt->execute($params);
+$accessories = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$totalResults = $totalCount;
+
+/* Pagination URL helper */
+function pageUrl($pageNum)
+{
+    $params = $_GET;
+    $params['page'] = $pageNum;
+    return '?' . http_build_query($params);
+}
+
+$latestStmt = $pdo->prepare("SELECT * FROM accessories WHERE status = 'active' ORDER BY created_at DESC, id DESC LIMIT 8");
+$latestStmt->execute();
+$latestItems = $latestStmt->fetchAll(PDO::FETCH_ASSOC);
+
+$hasActiveFilters = (
+    $keyword  !== ''
+    || $category !== ''
+    || $minPrice !== ''
+    || $maxPrice !== ''
+);
+
+include 'header.php';
+?>
+
+<style>
+    body {
+        background: #ffffff;
+    }
+
+    .acc-page {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 26px 18px 60px;
+    }
+
+    .top-promo-banner {
+        width: 100%;
+        min-height: 86px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, #2c2f8c, #4a4fc9);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 18px 34px;
+        color: #ffffff;
+        overflow: hidden;
+        margin-bottom: 28px;
+    }
+
+    .top-promo-content h2 {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.25;
+        font-weight: 800;
+    }
+
+    .top-promo-content p {
+        margin: 6px 0 0;
+        font-size: 15px;
+        opacity: 0.95;
+    }
+
+    .top-promo-btn {
+        border: 0;
+        background: #ffffff;
+        color: #0066cc;
+        padding: 11px 20px;
+        border-radius: 999px;
+        font-size: 14px;
+        font-weight: 800;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: 0.2s ease;
+    }
+
+    .top-promo-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+    }
+
+    .acc-search-bar {
+        display: grid;
+        grid-template-columns: 2fr 2fr 1fr 1fr;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 22px;
+        background: #ffffff;
+        border-radius: 22px;
+        padding: 28px 32px;
+        box-shadow: 0 10px 32px rgba(0, 0, 0, 0.08);
+    }
+
+    .acc-search-bar input,
+    .acc-search-bar select {
+        width: 100%;
+        height: 46px;
+        border: 1px solid #d8dde4;
+        border-radius: 999px;
+        padding: 0 16px;
+        font-size: 14px;
+        color: #333333;
+        background: #ffffff;
+        outline: none;
+        transition: 0.2s ease;
+        box-sizing: border-box;
+    }
+
+    .acc-search-bar input::placeholder {
+        color: #888888;
+    }
+
+    .acc-search-bar input:focus,
+    .acc-search-bar select:focus {
+        border-color: #0066cc;
+        box-shadow: 0 0 0 3px rgba(59,65,200,0.08);
+    }
+
+    .acc-price-field {
+        width: 100%;
+        height: 46px;
+        border: 1px solid #d8dde4;
+        border-radius: 999px;
+        background: #ffffff;
+        display: grid;
+        grid-template-columns: 1fr 1px 1fr;
+        align-items: center;
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+
+    .acc-price-field select {
+        width: 100%;
+        height: 44px;
+        border: 0;
+        border-radius: 0;
+        padding: 0 14px;
+        font-size: 14px;
+        color: #333333;
+        background: transparent;
+        box-sizing: border-box;
+        cursor: pointer;
+        box-shadow: none;
+    }
+
+    .acc-price-field select:focus {
+        border: 0;
+        box-shadow: none;
+        outline: none;
+    }
+
+    .acc-price-divider {
+        width: 1px;
+        height: 26px;
+        background: #d8dde4;
+        display: block;
+    }
+
+    .acc-search-btn {
+        width: 100%;
+        height: 46px;
+        border: 0;
+        border-radius: 999px;
+        background: #0066cc;
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 900;
+        cursor: pointer;
+        transition: 0.25s ease;
+    }
+
+    .acc-search-btn:hover {
+        background: #2c31a8;
+        transform: translateY(-1px);
+    }
+
+    .result-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        margin: 18px 0 22px;
+        padding: 18px 0;
+        border-top: 1px solid #eeeeee;
+        border-bottom: 1px solid #eeeeee;
+    }
+
+    .result-header h1 {
+        margin: 0;
+        font-size: 27px;
+        line-height: 1.2;
+        color: #141414;
+        font-weight: 900;
+    }
+
+    .result-header p {
+        margin: 6px 0 0;
+        color: #6a7280;
+        font-size: 15px;
+    }
+
+    .clear-search-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 38px;
+        padding: 0 16px;
+        border-radius: 999px;
+        border: 1px solid #0066cc;
+        color: #0066cc;
+        font-size: 14px;
+        font-weight: 800;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .clear-search-link:hover {
+        background: #0066cc;
+        color: #ffffff;
+    }
+
+    .active-search-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 30px;
+    }
+
+    .search-tag {
+        display: inline-flex;
+        align-items: center;
+        min-height: 36px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: #eeefff;
+        color: #0066cc;
+        border: 1px solid #c7caff;
+        font-size: 14px;
+        font-weight: 800;
+        text-decoration: none;
+    }
+
+    .search-tag:hover {
+        background: #0066cc;
+        color: #ffffff;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+
+    .section-title::before {
+        content: "";
+        width: 4px;
+        height: 24px;
+        background: #0066cc;
+        border-radius: 999px;
+        display: block;
+    }
+
+    .section-title h2 {
+        margin: 0;
+        font-size: 23px;
+        color: #141414;
+        font-weight: 800;
+    }
+
+    .explore-layout {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        gap: 34px;
+        align-items: start;
+        margin-bottom: 38px;
+    }
+
+    .explore-tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+
+    .explore-tab {
+        border: 0;
+        background: #f0f1ff;
+        color: #555;
+        padding: 12px 23px;
+        border-radius: 999px;
+        font-size: 15px;
+        cursor: pointer;
+        transition: 0.2s ease;
+    }
+
+    .explore-tab.active {
+        background: #e0e3ff;
+        color: #0066cc;
+        font-weight: 800;
+    }
+
+    .explore-tab:hover {
+        background: #e0e3ff;
+        color: #0066cc;
+    }
+
+    .tab-panel {
+        display: none;
+    }
+
+    .tab-panel.active {
+        display: block;
+    }
+
+    .category-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 14px;
+    }
+
+    .category-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 22px 14px;
+        border: 1px solid #e4e8ee;
+        border-radius: 14px;
+        background: #fafbff;
+        text-decoration: none;
+        color: #333333;
+        font-size: 14px;
+        font-weight: 700;
+        text-align: center;
+        transition: 0.2s ease;
+    }
+
+    .category-item:hover {
+        background: #eef1ff;
+        border-color: #0066cc;
+        color: #0066cc;
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0, 102, 204, 0.1);
+    }
+
+    .category-icon {
+        font-size: 30px;
+        line-height: 1;
+    }
+
+    .category-label {
+        line-height: 1.3;
+    }
+
+    .latest-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .latest-item {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        border: 1px solid #eeeeee;
+        border-radius: 12px;
+        padding: 10px;
+        text-decoration: none;
+        color: #222;
+        transition: 0.2s ease;
+    }
+
+    .latest-item:hover {
+        border-color: #0066cc;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        transform: translateY(-2px);
+    }
+
+    .latest-item img {
+        width: 88px;
+        height: 62px;
+        object-fit: cover;
+        border-radius: 8px;
+        background: #f1f1f1;
+    }
+
+    .latest-item strong {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+
+    .latest-item span {
+        font-size: 13px;
+        color: #0066cc;
+        font-weight: 800;
+    }
+
+    .side-promo {
+        display: grid;
+        gap: 14px;
+    }
+
+    .side-promo-box {
+        border: 1px solid #e4e8ee;
+        border-radius: 4px;
+        min-height: 210px;
+        background:
+            radial-gradient(circle at 20% 70%, rgba(59,65,200,0.12), transparent 28%),
+            linear-gradient(135deg, #ffffff, #f5f6ff);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 22px;
+    }
+
+    .side-promo-box h3 {
+        margin: 0;
+        font-size: 25px;
+        color: #2f3542;
+        line-height: 1.15;
+        font-weight: 900;
+    }
+
+    .side-promo-box p {
+        margin: 12px 0 0;
+        color: #0066cc;
+        font-weight: 900;
+        font-size: 15px;
+    }
+
+    .small-promo-box {
+        border-radius: 7px;
+        background: #f0f1ff;
+        padding: 15px;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+    }
+
+    .small-promo-icon {
+        width: 62px;
+        height: 46px;
+        border-radius: 12px;
+        background: #e0e3ff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 25px;
+    }
+
+    .small-promo-box strong {
+        display: block;
+        color: #0066cc;
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+
+    .small-promo-box span {
+        color: #333;
+        font-size: 13px;
+        line-height: 1.35;
+    }
+
+    .promo-heading-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+    }
+
+    .promo-heading-row .section-title {
+        margin-bottom: 0;
+    }
+
+    .view-all-link {
+        color: #0066cc;
+        text-decoration: none;
+        font-size: 15px;
+    }
+
+    .view-all-link:hover {
+        color: #2c31a8;
+    }
+
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px;
+    }
+
+    .acc-card {
+        border: 1px solid #eeeeee;
+        border-radius: 10px;
+        background: #ffffff;
+        overflow: hidden;
+        text-decoration: none;
+        color: #222;
+        transition: 0.2s ease;
+        display: block;
+    }
+
+    .acc-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 28px rgba(59,65,200,0.12);
+        border-color: #0066cc;
+    }
+
+    .acc-card-image {
+        width: 100%;
+        height: 160px;
+        background: #f3f3f3;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .acc-card-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        transition: 0.3s ease;
+    }
+
+    .acc-card:hover .acc-card-image img {
+        transform: scale(1.05);
+    }
+
+    .card-tag {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: #0066cc;
+        color: #ffffff;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    .acc-card-body {
+        padding: 14px;
+    }
+
+    .acc-card-title {
+        font-size: 15px;
+        font-weight: 800;
+        margin: 0 0 7px;
+        color: #1a1a1a;
+        line-height: 1.35;
+        min-height: 40px;
+    }
+
+    .acc-card-meta {
+        font-size: 13px;
+        color: #6a7280;
+        margin-bottom: 10px;
+    }
+
+    .acc-card-price {
+        font-size: 17px;
+        color: #0066cc;
+        font-weight: 900;
+        margin-bottom: 4px;
+    }
+
+    .acc-card.has-promo {
+        border-color: #f97316;
+        box-shadow: 0 4px 14px rgba(249, 115, 22, 0.18);
+    }
+
+    .promo-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: linear-gradient(135deg, #ef4444, #f97316);
+        color: #fff;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        box-shadow: 0 4px 10px rgba(249, 115, 22, 0.35);
+        z-index: 2;
+        animation: promoPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes promoPulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.06); }
+    }
+
+    .acc-card-original-price {
+        color: #6b7280;
+        font-size: 22px;
+        font-weight: 700;
+        margin-bottom: 2px;
+        line-height: 1.1;
+    }
+
+    .acc-card-original-price s {
+        text-decoration: line-through;
+        text-decoration-color: #ef4444;
+        text-decoration-thickness: 2px;
+    }
+
+    .acc-card-price.promo {
+        color: #ef4444;
+        font-size: 15px;
+        font-weight: 700;
+    }
+
+    .acc-card-price.promo::before {
+        content: 'Now: ';
+        color: #6b7280;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .acc-card-countdown {
+        display: inline-block;
+        margin-top: 6px;
+        background: #fff7ed;
+        color: #c2410c;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 5px 10px;
+        border-radius: 6px;
+        border: 1px solid #fed7aa;
+    }
+
+    .acc-card-note {
+        font-size: 13px;
+        color: #333;
+    }
+
+    .empty-box {
+        border: 1px dashed #d8dde4;
+        border-radius: 14px;
+        padding: 38px 18px;
+        text-align: center;
+        color: #777;
+        background: #fafafa;
+    }
+
+    .pagination {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        margin-top: 36px;
+    }
+
+    .page-link {
+        min-width: 40px;
+        height: 40px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid #d8dde4;
+        background: #ffffff;
+        color: #333;
+        font-size: 14px;
+        font-weight: 700;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: 0.2s ease;
+    }
+
+    .page-link:hover {
+        border-color: #0066cc;
+        color: #0066cc;
+    }
+
+    .page-link.is-active {
+        background: #0066cc;
+        border-color: #0066cc;
+        color: #ffffff;
+    }
+
+    .page-link.is-disabled {
+        opacity: 0.4;
+        pointer-events: none;
+    }
+
+    .page-ellipsis {
+        color: #999;
+        padding: 0 4px;
+        font-weight: 700;
+    }
+
+    @media (max-width: 980px) {
+        .acc-search-bar {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .explore-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .product-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .category-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+
+    @media (max-width: 780px) {
+        .result-header {
+            display: block;
+        }
+
+        .clear-search-link {
+            margin-top: 14px;
+        }
+    }
+
+    @media (max-width: 620px) {
+        .acc-page {
+            padding: 18px 14px 45px;
+        }
+
+        .top-promo-banner {
+            display: block;
+            padding: 18px;
+        }
+
+        .top-promo-btn {
+            display: inline-block;
+            margin-top: 14px;
+        }
+
+        .acc-search-bar {
+            grid-template-columns: 1fr;
+            padding: 22px 18px;
+            border-radius: 18px;
+        }
+
+        .category-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .latest-list,
+        .product-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .acc-card-image {
+            height: 210px;
+        }
+    }
+</style>
+
+<div class="acc-page">
+
+    <section class="top-promo-banner">
+        <div class="top-promo-content">
+            <h2>Buggy Accessories at SGBUGGYMART</h2>
+            <p>Seat covers, chargers, parts, lights and more — everything for your buggy.</p>
+        </div>
+
+        <a href="accessories.php" class="top-promo-btn">VIEW ACCESSORIES</a>
+    </section>
+
+    <form class="acc-search-bar" method="get" action="accessories.php">
+        <input
+            type="text"
+            name="keyword"
+            placeholder="Search accessories..."
+            value="<?php echo e($keyword); ?>"
+        >
+
+        <div class="acc-price-field">
+            <select name="min_price" id="accMinPrice">
+                <option value="">Min Price</option>
+                <?php foreach ($priceRangeOptions as $price): ?>
+                    <option value="<?php echo (int)$price; ?>" <?php echo $minPrice === (string)$price ? 'selected' : ''; ?>>
+                        $<?php echo number_format((int)$price); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+
+            <span class="acc-price-divider"></span>
+
+            <select name="max_price" id="accMaxPrice">
+                <option value="">Max Price</option>
+                <?php foreach ($priceRangeOptions as $price): ?>
+                    <option value="<?php echo (int)$price; ?>" <?php echo $maxPrice === (string)$price ? 'selected' : ''; ?>>
+                        $<?php echo number_format((int)$price); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <select name="category">
+            <option value="">All Categories</option>
+            <?php foreach ($accCategories as $catKey => $catLabel): ?>
+                <option value="<?php echo e($catKey); ?>" <?php echo $category === $catKey ? 'selected' : ''; ?>>
+                    <?php echo e($catLabel); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+
+        <button type="submit" class="acc-search-btn">Search</button>
+    </form>
+
+    <div class="result-header">
+        <div>
+            <h1><?php echo (int)$totalResults; ?> Accessories Found</h1>
+            <p>
+                <?php if ($hasActiveFilters): ?>
+                    Showing accessories based on your selected filters.
+                <?php else: ?>
+                    Showing all available accessory listings.
+                <?php endif; ?>
+            </p>
+        </div>
+
+        <?php if ($hasActiveFilters): ?>
+            <a href="accessories.php" class="clear-search-link">Clear All Filters</a>
+        <?php endif; ?>
+    </div>
+
+    <?php if ($hasActiveFilters): ?>
+        <div class="active-search-tags">
+            <?php if ($keyword !== ''): ?>
+                <a class="search-tag" href="<?php echo e(removeQueryParam('keyword')); ?>">
+                    Keyword: <?php echo e($keyword); ?> &times;
+                </a>
+            <?php endif; ?>
+
+            <?php if ($category !== '' && isset($accCategories[$category])): ?>
+                <a class="search-tag" href="<?php echo e(removeQueryParam('category')); ?>">
+                    <?php echo e($accCategories[$category]); ?> &times;
+                </a>
+            <?php endif; ?>
+
+            <?php if ($minPrice !== ''): ?>
+                <a class="search-tag" href="<?php echo e(removeQueryParam('min_price')); ?>">
+                    Min: $<?php echo number_format((float)$minPrice, 0); ?> &times;
+                </a>
+            <?php endif; ?>
+
+            <?php if ($maxPrice !== ''): ?>
+                <a class="search-tag" href="<?php echo e(removeQueryParam('max_price')); ?>">
+                    Max: $<?php echo number_format((float)$maxPrice, 0); ?> &times;
+                </a>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <section class="explore-section">
+        <div class="section-title">
+            <h2>Browse Accessories</h2>
+        </div>
+
+        <div class="explore-layout">
+            <div class="explore-main">
+                <div class="explore-tabs">
+                    <button type="button" class="explore-tab active" data-tab="categories">Categories</button>
+                    <button type="button" class="explore-tab" data-tab="latest">Latest Added</button>
+                </div>
+
+                <div class="tab-panel active" id="tab-categories">
+                    <div class="category-grid">
+                        <a class="category-item" href="accessories.php?category=batteries">
+                            <span class="category-icon">🔋</span>
+                            <span class="category-label">Batteries</span>
+                        </a>
+                        <a class="category-item" href="accessories.php?category=tyres">
+                            <span class="category-icon">🛞</span>
+                            <span class="category-label">Tyres</span>
+                        </a>
+                        <a class="category-item" href="accessories.php?category=mechanical-parts">
+                            <span class="category-icon">⚙️</span>
+                            <span class="category-label">Mechanical Parts</span>
+                        </a>
+                        <a class="category-item" href="accessories.php?category=electrical-parts">
+                            <span class="category-icon">⚡</span>
+                            <span class="category-label">Electrical Parts</span>
+                        </a>
+                        <a class="category-item" href="accessories.php?category=others">
+                            <span class="category-icon">📦</span>
+                            <span class="category-label">Others</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="tab-panel" id="tab-latest">
+                    <?php if (count($latestItems) > 0): ?>
+                        <div class="latest-list">
+                            <?php foreach ($latestItems as $latest): ?>
+                                <a href="buggy-detail.php?id=<?php echo (int)$latest['id']; ?>" class="latest-item">
+                                    <img
+                                        src="<?php echo e(accImagePath($latest['image_url'] ?? '')); ?>"
+                                        alt="<?php echo e($latest['name'] ?? 'Accessory'); ?>"
+                                        onerror="this.src='images/no-image.png';"
+                                    >
+                                    <div>
+                                        <strong><?php echo e($latest['name'] ?: ($latest['brand'] . ' ' . $latest['model'])); ?></strong>
+                                        <span><?php echo e(accFormatPrice($latest['selling_price'] ?? 0)); ?></span>
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="empty-box">No accessories added yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <aside class="side-promo">
+                <div class="side-promo-box">
+                    <div>
+                        <h3>SGBUGGYMART<br>Accessories</h3>
+                        <p>PARTS &amp; ADD-ONS FOR YOUR BUGGY</p>
+                    </div>
+                </div>
+
+                <div class="small-promo-box">
+                    <div class="small-promo-icon">🔧</div>
+                    <div>
+                        <strong>Wide range of accessories</strong>
+                        <span>Covers, chargers, lights, tyres and more.</span>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section class="acc-listing-section">
+        <div class="promo-heading-row">
+            <div class="section-title">
+                <h2>All Accessories</h2>
+            </div>
+
+            <a href="accessories.php" class="view-all-link">View All</a>
+        </div>
+
+        <?php if (count($accessories) > 0): ?>
+            <div class="product-grid">
+                <?php foreach ($accessories as $item):
+                    $hasPromo = isPromoActive($item);
+                ?>
+                     <a href="accessory-detail.php?id=<?php echo (int)$item['id']; ?>" class="acc-card <?php echo $hasPromo ? 'has-promo' : ''; ?>">
+                        <div class="acc-card-image">
+                            <img
+                                src="<?php echo e(accImagePath($item['image_url'] ?? '')); ?>"
+                                alt="<?php echo e($item['name'] ?? 'Accessory'); ?>"
+                                onerror="this.src='images/no-image.png';"
+                            >
+
+                            <?php if ($hasPromo): ?>
+                                <span class="promo-badge">🔥 <?php echo e($item['promo_label'] ?: 'PROMO'); ?></span>
+                            <?php endif; ?>
+
+                            <span class="card-tag">
+                                <?php echo e($item['tag'] ?: 'Accessory'); ?>
+                            </span>
+                        </div>
+
+                        <div class="acc-card-body">
+                            <h3 class="acc-card-title">
+                                <?php echo e($item['name'] ?: ($item['brand'] . ' ' . $item['model'])); ?>
+                            </h3>
+
+                            <div class="acc-card-meta">
+                                <?php echo e($item['brand'] ?: 'Accessory'); ?>
+                                <?php if (!empty($item['short_info'])): ?>
+                                    — <?php echo e($item['short_info']); ?>
+                                <?php endif; ?>
+                            </div>
+
+                            <?php if ($hasPromo): ?>
+                                <div class="acc-card-original-price">
+                                    <s>$<?php echo number_format((float)$item['selling_price'], 0); ?></s>
+                                </div>
+                                <div class="acc-card-price promo">
+                                    <?php echo e(accFormatPrice($item['discount_price'] ?? 0)); ?>
+                                </div>
+                                <div class="acc-card-countdown">
+                                    ⏰ <?php echo e(formatPromoTimeLeft($item['promo_end_date'])); ?>
+                                </div>
+                            <?php else: ?>
+                                <div class="acc-card-price">
+                                    <?php echo e(accFormatPrice($item['selling_price'] ?? 0)); ?>
+                                </div>
+                                <div class="acc-card-note">
+                                    Contact us for availability
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+
+            <?php if ($totalPages > 1): ?>
+                <nav class="pagination">
+                    <?php if ($page > 1): ?>
+                        <a href="<?php echo e(pageUrl($page - 1)); ?>" class="page-link">&laquo; Prev</a>
+                    <?php else: ?>
+                        <span class="page-link is-disabled">&laquo; Prev</span>
+                    <?php endif; ?>
+
+                    <?php
+                    $windowStart = max(1, $page - 2);
+                    $windowEnd   = min($totalPages, $page + 2);
+                    if ($windowStart > 1): ?>
+                        <a href="<?php echo e(pageUrl(1)); ?>" class="page-link">1</a>
+                        <?php if ($windowStart > 2): ?>
+                            <span class="page-ellipsis">…</span>
+                        <?php endif; ?>
+                    <?php endif; ?>
+
+                    <?php for ($p = $windowStart; $p <= $windowEnd; $p++): ?>
+                        <?php if ($p === $page): ?>
+                            <span class="page-link is-active"><?php echo (int)$p; ?></span>
+                        <?php else: ?>
+                            <a href="<?php echo e(pageUrl($p)); ?>" class="page-link"><?php echo (int)$p; ?></a>
+                        <?php endif; ?>
+                    <?php endfor; ?>
+
+                    <?php if ($windowEnd < $totalPages): ?>
+                        <?php if ($windowEnd < $totalPages - 1): ?>
+                            <span class="page-ellipsis">…</span>
+                        <?php endif; ?>
+                        <a href="<?php echo e(pageUrl($totalPages)); ?>" class="page-link"><?php echo (int)$totalPages; ?></a>
+                    <?php endif; ?>
+
+                    <?php if ($page < $totalPages): ?>
+                        <a href="<?php echo e(pageUrl($page + 1)); ?>" class="page-link">Next &raquo;</a>
+                    <?php else: ?>
+                        <span class="page-link is-disabled">Next &raquo;</span>
+                    <?php endif; ?>
+                </nav>
+            <?php endif; ?>
+        <?php else: ?>
+            <div class="empty-box">
+                No accessories found. Try another search filter.
+            </div>
+        <?php endif; ?>
+    </section>
+
+</div>
+
+<script>
+    const exploreTabs = document.querySelectorAll('.explore-tab');
+    const tabPanels   = document.querySelectorAll('.tab-panel');
+
+    exploreTabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            const target = this.dataset.tab;
+
+            exploreTabs.forEach(function (item) { item.classList.remove('active'); });
+            tabPanels.forEach(function (panel)  { panel.classList.remove('active'); });
+
+            this.classList.add('active');
+
+            const activePanel = document.getElementById('tab-' + target);
+            if (activePanel) activePanel.classList.add('active');
+        });
+    });
+
+    const accMinPrice = document.getElementById('accMinPrice');
+    const accMaxPrice = document.getElementById('accMaxPrice');
+
+    function updateAccMaxPriceOptions() {
+        if (!accMinPrice || !accMaxPrice) return;
+
+        const selectedMin = parseInt(accMinPrice.value, 10) || 0;
+        const selectedMax = parseInt(accMaxPrice.value, 10) || 0;
+
+        Array.from(accMaxPrice.options).forEach(function (option) {
+            const optionValue = parseInt(option.value, 10) || 0;
+
+            if (option.value !== '' && selectedMin > 0 && optionValue <= selectedMin) {
+                option.disabled = true;
+            } else {
+                option.disabled = false;
+            }
+        });
+
+        if (selectedMax > 0 && selectedMax <= selectedMin) {
+            accMaxPrice.value = '';
+        }
+    }
+
+    if (accMinPrice) {
+        accMinPrice.addEventListener('change', updateAccMaxPriceOptions);
+    }
+
+    updateAccMaxPriceOptions();
+</script>
+
+<?php include 'footer.php'; ?>
