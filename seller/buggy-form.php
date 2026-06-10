@@ -45,6 +45,76 @@ function normalizeSellerCategory($value)
     return $value;
 }
 
+function uploadSellerDatasheetPdf(&$error)
+{
+    if (!isset($_FILES['datasheet_file']) || $_FILES['datasheet_file']['error'] === UPLOAD_ERR_NO_FILE) {
+        return '';
+    }
+
+    $errCode = $_FILES['datasheet_file']['error'];
+    if ($errCode !== UPLOAD_ERR_OK) {
+        $map = [
+            UPLOAD_ERR_INI_SIZE   => 'PDF exceeds server upload_max_filesize limit (' . ini_get('upload_max_filesize') . ').',
+            UPLOAD_ERR_FORM_SIZE  => 'PDF exceeds form MAX_FILE_SIZE limit.',
+            UPLOAD_ERR_PARTIAL    => 'PDF was only partially uploaded.',
+            UPLOAD_ERR_NO_FILE    => 'No PDF was selected.',
+            UPLOAD_ERR_NO_TMP_DIR => 'Server is missing a temporary upload folder.',
+            UPLOAD_ERR_CANT_WRITE => 'Server failed to write the PDF to disk.',
+            UPLOAD_ERR_EXTENSION  => 'A PHP extension blocked the upload.',
+        ];
+        $error = 'Datasheet upload failed: ' . ($map[$errCode] ?? ('error code ' . $errCode));
+        return '';
+    }
+
+    $tmpName  = $_FILES['datasheet_file']['tmp_name'];
+    $original = $_FILES['datasheet_file']['name'];
+    $fileSize = $_FILES['datasheet_file']['size'];
+    $ext      = strtolower(pathinfo($original, PATHINFO_EXTENSION));
+
+    if ($ext !== 'pdf') {
+        $error = 'Datasheet must be a PDF file.';
+        return '';
+    }
+
+    if ($fileSize > 5 * 1024 * 1024) {
+        $error = 'Datasheet must be below 5MB.';
+        return '';
+    }
+
+    if (function_exists('finfo_open')) {
+        $finfo    = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo ? finfo_file($finfo, $tmpName) : '';
+        if ($finfo) finfo_close($finfo);
+        if ($mimeType && stripos($mimeType, 'pdf') === false) {
+            $error = 'Datasheet is not a valid PDF (detected: ' . htmlspecialchars($mimeType) . ').';
+            return '';
+        }
+    }
+
+    $uploadDir = __DIR__ . '/../uploads/datasheets/';
+    if (!is_dir($uploadDir)) {
+        if (!@mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+            $error = 'Server could not create the uploads/datasheets folder. Please create it manually with write permission.';
+            return '';
+        }
+    }
+    if (!is_writable($uploadDir)) {
+        $error = 'uploads/datasheets folder is not writable on the server.';
+        return '';
+    }
+
+    $safeName    = preg_replace('/[^a-zA-Z0-9-_]/', '-', pathinfo($original, PATHINFO_FILENAME));
+    $newFileName = 'seller-datasheet-' . $safeName . '-' . time() . '-' . rand(1000, 9999) . '.pdf';
+    $targetPath  = $uploadDir . $newFileName;
+
+    if (!move_uploaded_file($tmpName, $targetPath)) {
+        $error = 'move_uploaded_file failed writing to ' . $uploadDir;
+        return '';
+    }
+
+    return 'uploads/datasheets/' . $newFileName;
+}
+
 function uploadSellerGalleryImages($pdo, $buggyId, &$error)
 {
     if (!isset($_FILES['gallery_images']) || empty($_FILES['gallery_images']['name'][0])) {
@@ -193,6 +263,7 @@ $formData = [
     'description'     => '',
     'specifications'  => [],
     'image_url'       => '',
+    'datasheet_url'   => '',
     'status'          => 'active',
 ];
 
@@ -229,6 +300,7 @@ if ($isEdit) {
         $formData['short_info']      = $product['short_info']      ?? '';
         $formData['description']     = $product['description']     ?? '';
         $formData['image_url']       = $product['image_url']       ?? '';
+        $formData['datasheet_url']   = $product['datasheet_url']   ?? '';
         $formData['status']          = $product['status']          ?? 'active';
 
         if (!empty($product['specifications'])) {
@@ -294,6 +366,23 @@ if ($isEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['image_acti
             } catch (PDOException $e) {
                 $error = 'Failed to remove gallery image: ' . $e->getMessage();
             }
+        }
+    }
+
+    if ($imageAction === 'delete_datasheet') {
+        try {
+            $stmt = $pdo->prepare("SELECT datasheet_url FROM buggies WHERE id = ? AND owner_type = 'seller' AND owner_id = ?");
+            $stmt->execute([$id, $sellerId]);
+            $oldUrl = (string)$stmt->fetchColumn();
+            if ($oldUrl !== '') {
+                $oldPath = __DIR__ . '/../' . $oldUrl;
+                if (is_file($oldPath)) @unlink($oldPath);
+            }
+            $stmt = $pdo->prepare("UPDATE buggies SET datasheet_url = NULL, updated_at = NOW() WHERE id = ? AND owner_type = 'seller' AND owner_id = ?");
+            $stmt->execute([$id, $sellerId]);
+            $success = 'Datasheet removed.';
+        } catch (PDOException $e) {
+            $error = 'Failed to remove datasheet: ' . $e->getMessage();
         }
     }
 
@@ -385,6 +474,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product'])) {
     $formData['specifications']  = $parsedSpecs;
     $formData['status']          = $sellerStatus;
 
+    // Datasheet PDF (optional)
+    $newDatasheetUrl = uploadSellerDatasheetPdf($error);
+    if ($error === '' && $newDatasheetUrl !== '') {
+        $formData['datasheet_url'] = $newDatasheetUrl;
+    } elseif ($error === '' && $isEdit) {
+        // Keep existing datasheet
+        try {
+            $dsStmt = $pdo->prepare("SELECT datasheet_url FROM buggies WHERE id = ? AND owner_type = 'seller' AND owner_id = ?");
+            $dsStmt->execute([$id, $sellerId]);
+            $formData['datasheet_url'] = (string)($dsStmt->fetchColumn() ?: '');
+        } catch (PDOException $e) {
+            // ignore
+        }
+    }
+
     if ($brand === 'Others' && $customBrand !== '') {
         $brand = $customBrand;
     } elseif ($brand !== '' && !in_array($brand, $brandOptions, true)) {
@@ -421,6 +525,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product'])) {
                         tag             = :tag,
                         brand_tag       = :brand_tag,
                         status          = :status,
+                        datasheet_url   = :datasheet_url,
                         updated_at      = NOW()
                     WHERE id = :id
                     AND owner_type = 'seller'
@@ -442,6 +547,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product'])) {
                     ':tag'             => $tag,
                     ':brand_tag'       => $brand,
                     ':status'          => $sellerStatus,
+                    ':datasheet_url'   => $formData['datasheet_url'] !== '' ? $formData['datasheet_url'] : null,
                     ':id'              => $id,
                     ':owner_id'        => $sellerId,
                 ]);
@@ -467,12 +573,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product'])) {
                     owner_type, owner_id, brand, model, name, seats, buggy_year,
                     listing_type, buggy_condition, selling_price, serial_number, remark,
                     short_info, description, specifications, image_url, tag, brand_tag,
-                    status, created_at, updated_at
+                    status, datasheet_url, created_at, updated_at
                 ) VALUES (
                     'seller', :owner_id, :brand, :model, :name, :seats, :buggy_year,
                     'sale', :buggy_condition, :selling_price, :serial_number, :remark,
                     :short_info, :description, :specifications, '', :tag, :brand_tag,
-                    :status, NOW(), NOW()
+                    :status, :datasheet_url, NOW(), NOW()
                 )
             ");
             $stmt->execute([
@@ -492,6 +598,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product'])) {
                 ':tag'             => $tag,
                 ':brand_tag'       => $brand,
                 ':status'          => $sellerStatus,
+                ':datasheet_url'   => $formData['datasheet_url'] !== '' ? $formData['datasheet_url'] : null,
             ]);
 
             $newBuggyId   = (int)$pdo->lastInsertId();
@@ -649,7 +756,9 @@ include '../header.php';
     .main-image-title { font-weight: bold; margin-bottom: 12px; }
     .main-image-preview { width: 170px; height: 170px; border-radius: 12px; object-fit: cover; border: 1px solid #ddd; background: #f1f1f1; }
 
-    .gallery-grid { display: grid; grid-template-columns: repeat(5, 180px); gap: 20px; margin-bottom: 30px; }
+    .gallery-grid { display: grid; grid-template-columns: repeat(4, 230px); gap: 20px; margin-bottom: 30px; }
+    .gallery-card.is-primary { border-color: #16a34a; box-shadow: 0 0 0 2px #16a34a inset; }
+    .primary-badge { display: inline-flex; align-items: center; gap: 4px; background: #16a34a; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; height: 28px; line-height: 1; }
     .gallery-card { border: 1px solid #eee; border-radius: 10px; padding: 10px; background: #fff; }
     .gallery-actions { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: nowrap; align-items: center; }
     .gallery-actions form { display: inline-flex !important; margin: 0; }
@@ -658,14 +767,14 @@ include '../header.php';
     .set-primary-btn { background: #7dd3e8; } .set-primary-btn:hover { background: #59bfd8; }
     .remove-btn { background: #ef8585; } .remove-btn:hover { background: #ef3f4d; }
 
-    .gallery-image { width: 158px; height: 158px; object-fit: cover; background: #fff; display: block; margin-bottom: 10px; border: 1px solid #eee; border-radius: 4px; }
+    .gallery-image { width: 208px; height: 208px; object-fit: cover; background: #fff; display: block; margin-bottom: 10px; border: 1px solid #eee; border-radius: 4px; }
 
     .upload-area { border: 1px solid #eee; background: #fafafa; height: 100px; display: flex; align-items: center; justify-content: center; color: #333; margin: 0 0 16px; transition: 0.2s ease; }
     .upload-area.dragover { border-color: #ef3f4d; background: #fff7f8; color: #ef3f4d; }
 
     .upload-preview-area { display: flex; flex-wrap: wrap; gap: 18px 30px; margin-top: 14px; align-items: flex-start; max-width: 1100px; }
-    .upload-card { width: 180px; position: relative; }
-    .upload-box { width: 180px; height: 180px; background: #eef3f6; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; overflow: hidden; border-radius: 4px; transition: 0.2s ease; }
+    .upload-card { width: 230px; position: relative; }
+    .upload-box { width: 230px; height: 230px; background: #eef3f6; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; overflow: hidden; border-radius: 4px; transition: 0.2s ease; }
     .upload-box:hover { border-color: #ef3f4d; }
     .upload-placeholder {
         display: flex;
@@ -679,7 +788,7 @@ include '../header.php';
     }
     .upload-icon { font-size: 48px; line-height: 1; margin-bottom: 8px; }
     .upload-label { background: #999; color: #fff; padding: 6px 10px; border-radius: 4px; display: inline-block; font-size: 13px; }
-    .preview-upload-img { width: 180px; height: 180px; object-fit: cover; border: 1px solid #ddd; display: block; border-radius: 4px; }
+    .preview-upload-img { width: 230px; height: 230px; object-fit: cover; border: 1px solid #ddd; display: block; border-radius: 4px; }
 
     .remove-preview-btn { position: absolute; top: 0; right: 0; width: 24px; height: 24px; border: 0; background: #ef3f4d; color: #fff; font-weight: bold; cursor: pointer; z-index: 2; border-radius: 0 4px 0 6px; line-height: 1; font-size: 16px; transition: 0.2s ease; }
     .remove-preview-btn:hover { background: #d92e3d; }
@@ -692,9 +801,9 @@ include '../header.php';
     .image-input-hidden { display: none; }
     .form-note { color: #777; margin-top: 18px; font-size: 14px; }
 
-    @media (max-width: 1200px) { .gallery-grid { grid-template-columns: repeat(4, 180px); } }
+    @media (max-width: 1200px) { .gallery-grid { grid-template-columns: repeat(3, 230px); } }
     @media (max-width: 1000px) { .seller-layout { grid-template-columns: 1fr; } .seller-sidebar { order: 2; } .seller-main { order: 1; } }
-    @media (max-width: 900px)  { .form-group { width: 100%; } .gallery-grid { grid-template-columns: repeat(2, 180px); } .upload-preview-area { max-width: 420px; } }
+    @media (max-width: 900px)  { .form-group { width: 100%; } .gallery-grid { grid-template-columns: repeat(2, 230px); } .upload-preview-area { max-width: 480px; } }
     @media (max-width: 700px)  {
         .seller-product-page { padding: 28px 12px 56px; }
         .form-header { display: block; }
@@ -972,6 +1081,26 @@ include '../header.php';
                                     <textarea name="description" placeholder="Write buggy condition, usage, battery condition, accessories and remarks here" required><?php echo e($formData['description']); ?></textarea>
                                 </div>
 
+                                <div class="section-title">Datasheet (PDF)</div>
+
+                                <div class="form-group full">
+                                    <label>Buggy Datasheet (PDF, max 5MB)</label>
+                                    <?php if (!empty($formData['datasheet_url'])): ?>
+                                        <div style="margin-bottom:10px;display:flex;align-items:center;gap:14px;">
+                                            <a href="<?php echo e('../' . $formData['datasheet_url']); ?>" target="_blank" style="color:#ef3f4d;font-weight:600;">
+                                                📄 View current datasheet
+                                            </a>
+                                            <button type="button"
+                                                    onclick="deleteSellerDatasheet()"
+                                                    style="background:#ef3f4d;color:#fff;border:0;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;">
+                                                Remove
+                                            </button>
+                                        </div>
+                                    <?php endif; ?>
+                                    <input type="file" name="datasheet_file" accept="application/pdf" style="display:flex;align-items:center;padding:10px 12px;">
+                                    <div class="help">Optional. Upload a product datasheet/spec sheet as PDF. Leave empty to keep the existing file.</div>
+                                </div>
+
                                 <div class="section-title">
                                     Buggy Images
                                     <?php if ($isEdit && (count($galleryImages) + (!empty($formData['image_url']) ? 1 : 0)) > 0): ?>
@@ -981,37 +1110,33 @@ include '../header.php';
                                     <?php endif; ?>
                                 </div>
 
-                                <?php if ($isEdit): ?>
+                                <?php if ($isEdit && count($galleryImages) > 0): ?>
                                     <div class="form-group full">
-                                        <div class="main-image-box">
-                                            <div class="main-image-title">Current Primary Image</div>
-                                            <img src="<?php echo e(productImagePath($formData['image_url'])); ?>" alt="Primary Image" class="main-image-preview" onerror="this.src='../images/no-image.png';">
-                                        </div>
-                                    </div>
-
-                                    <?php if (count($galleryImages) > 0): ?>
-                                        <div class="form-group full">
-                                            <div class="gallery-grid">
-                                                <?php foreach ($galleryImages as $gallery): ?>
-                                                    <div class="gallery-card">
-                                                        <div class="gallery-actions">
+                                        <div class="gallery-grid">
+                                            <?php foreach ($galleryImages as $gallery): ?>
+                                                <?php $isPrimary = trim((string)$gallery['image_url']) !== '' && trim((string)$gallery['image_url']) === trim((string)$formData['image_url']); ?>
+                                                <div class="gallery-card<?php echo $isPrimary ? ' is-primary' : ''; ?>">
+                                                    <div class="gallery-actions">
+                                                        <?php if ($isPrimary): ?>
+                                                            <span class="primary-badge">✓ Primary</span>
+                                                        <?php else: ?>
                                                             <form method="post">
                                                                 <input type="hidden" name="image_action" value="set_primary">
                                                                 <input type="hidden" name="gallery_id" value="<?php echo (int)$gallery['id']; ?>">
                                                                 <button type="submit" class="image-action-btn set-primary-btn" onclick="return confirm('Set this image as primary?');">+ Set Primary</button>
                                                             </form>
-                                                            <form method="post">
-                                                                <input type="hidden" name="image_action" value="remove_gallery">
-                                                                <input type="hidden" name="gallery_id" value="<?php echo (int)$gallery['id']; ?>">
-                                                                <button type="submit" class="image-action-btn remove-btn" onclick="return confirm('Remove this image?');">Remove</button>
-                                                            </form>
-                                                        </div>
-                                                        <img src="<?php echo e(productImagePath($gallery['image_url'])); ?>" alt="Gallery Image" class="gallery-image" onerror="this.src='../images/no-image.png';">
+                                                        <?php endif; ?>
+                                                        <form method="post">
+                                                            <input type="hidden" name="image_action" value="remove_gallery">
+                                                            <input type="hidden" name="gallery_id" value="<?php echo (int)$gallery['id']; ?>">
+                                                            <button type="submit" class="image-action-btn remove-btn" onclick="return confirm('Remove this image?');">Remove</button>
+                                                        </form>
                                                     </div>
-                                                <?php endforeach; ?>
-                                            </div>
+                                                    <img src="<?php echo e(productImagePath($gallery['image_url'])); ?>" alt="Gallery Image" class="gallery-image" onerror="this.src='../images/no-image.png';">
+                                                </div>
+                                            <?php endforeach; ?>
                                         </div>
-                                    <?php endif; ?>
+                                    </div>
                                 <?php endif; ?>
 
                                 <div class="form-group full">
@@ -1061,6 +1186,18 @@ include '../header.php';
 </section>
 
 <script>
+    function deleteSellerDatasheet() {
+        if (!confirm('Remove the current datasheet PDF?')) return;
+        const f = document.createElement('form');
+        f.method = 'post';
+        f.action = window.location.href;
+        const a = document.createElement('input');
+        a.type = 'hidden'; a.name = 'image_action'; a.value = 'delete_datasheet';
+        f.appendChild(a);
+        document.body.appendChild(f);
+        f.submit();
+    }
+
     const submitActionInput = document.getElementById('submitActionInput');
 
     if (submitActionInput) {

@@ -603,6 +603,16 @@ include 'header.php';
             }
             ?>
         </div>
+
+        <?php if (!empty($item['datasheet_url'])): ?>
+            <div style="margin-top:20px;padding-top:16px;border-top:1px solid #eee;">
+                <a href="<?php echo htmlspecialchars($item['datasheet_url']); ?>"
+                   target="_blank"
+                   style="display:inline-flex;align-items:center;gap:8px;background:#ef3f4d;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:700;">
+                    📄 Download Datasheet (PDF)
+                </a>
+            </div>
+        <?php endif; ?>
     </section>
 
     <section class="section-box" id="specification">

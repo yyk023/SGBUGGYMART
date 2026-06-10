@@ -39,6 +39,7 @@ $sql = "
         description,
         specifications,
         image_url,
+        datasheet_url,
         tag,
         brand_tag,
         status,
@@ -1734,6 +1735,17 @@ $filterYearEnd      = $filterYearStart - 15;
             <?php endforeach; ?>
         </table>
     </section>
+
+    <?php if (!empty($buggy['datasheet_url'])): ?>
+        <section class="section-box" id="datasheet">
+            <h2>Datasheet</h2>
+            <a href="<?php echo htmlspecialchars($buggy['datasheet_url']); ?>"
+               target="_blank"
+               style="display:inline-flex;align-items:center;gap:8px;background:#ef3f4d;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700;">
+                📄 Download Datasheet (PDF)
+            </a>
+        </section>
+    <?php endif; ?>
 
     <?php if (!empty($similarBuggies)): ?>
     <section class="section-box" id="similar">

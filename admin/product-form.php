@@ -125,6 +125,76 @@ function normalizeCategory($value)
     return $value;
 }
 
+function uploadDatasheetPdf(&$error)
+{
+    if (!isset($_FILES['datasheet_file']) || $_FILES['datasheet_file']['error'] === UPLOAD_ERR_NO_FILE) {
+        return '';
+    }
+
+    $errCode = $_FILES['datasheet_file']['error'];
+    if ($errCode !== UPLOAD_ERR_OK) {
+        $map = [
+            UPLOAD_ERR_INI_SIZE   => 'PDF exceeds server upload_max_filesize limit (' . ini_get('upload_max_filesize') . ').',
+            UPLOAD_ERR_FORM_SIZE  => 'PDF exceeds form MAX_FILE_SIZE limit.',
+            UPLOAD_ERR_PARTIAL    => 'PDF was only partially uploaded.',
+            UPLOAD_ERR_NO_FILE    => 'No PDF was selected.',
+            UPLOAD_ERR_NO_TMP_DIR => 'Server is missing a temporary upload folder.',
+            UPLOAD_ERR_CANT_WRITE => 'Server failed to write the PDF to disk.',
+            UPLOAD_ERR_EXTENSION  => 'A PHP extension blocked the upload.',
+        ];
+        $error = 'Datasheet upload failed: ' . ($map[$errCode] ?? ('error code ' . $errCode));
+        return '';
+    }
+
+    $tmpName  = $_FILES['datasheet_file']['tmp_name'];
+    $original = $_FILES['datasheet_file']['name'];
+    $fileSize = $_FILES['datasheet_file']['size'];
+    $ext      = strtolower(pathinfo($original, PATHINFO_EXTENSION));
+
+    if ($ext !== 'pdf') {
+        $error = 'Datasheet must be a PDF file.';
+        return '';
+    }
+
+    if ($fileSize > 5 * 1024 * 1024) {
+        $error = 'Datasheet must be below 5MB.';
+        return '';
+    }
+
+    if (function_exists('finfo_open')) {
+        $finfo    = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo ? finfo_file($finfo, $tmpName) : '';
+        if ($finfo) finfo_close($finfo);
+        if ($mimeType && stripos($mimeType, 'pdf') === false) {
+            $error = 'Datasheet is not a valid PDF (detected: ' . htmlspecialchars($mimeType) . ').';
+            return '';
+        }
+    }
+
+    $uploadDir = __DIR__ . '/../uploads/datasheets/';
+    if (!is_dir($uploadDir)) {
+        if (!@mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+            $error = 'Server could not create the uploads/datasheets folder. Please create it manually with write permission.';
+            return '';
+        }
+    }
+    if (!is_writable($uploadDir)) {
+        $error = 'uploads/datasheets folder is not writable on the server.';
+        return '';
+    }
+
+    $safeName    = preg_replace('/[^a-zA-Z0-9-_]/', '-', pathinfo($original, PATHINFO_FILENAME));
+    $newFileName = 'buggy-datasheet-' . $safeName . '-' . time() . '-' . rand(1000, 9999) . '.pdf';
+    $targetPath  = $uploadDir . $newFileName;
+
+    if (!move_uploaded_file($tmpName, $targetPath)) {
+        $error = 'move_uploaded_file failed writing to ' . $uploadDir;
+        return '';
+    }
+
+    return 'uploads/datasheets/' . $newFileName;
+}
+
 function uploadGalleryImages($pdo, $buggyId, &$error)
 {
     if (!isset($_FILES['gallery_images']) || empty($_FILES['gallery_images']['name'][0])) {
@@ -224,7 +294,8 @@ $formData = [
     'discount_price' => '',
     'promo_end_date'       => '',
     'promo_label'          => '',
-    'image_url' => ''
+    'image_url' => '',
+    'datasheet_url' => ''
 ];
 
 $product = null;
@@ -321,6 +392,23 @@ if ($isEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['image_acti
         }
     }
 
+    if ($imageAction === 'delete_datasheet') {
+        try {
+            $stmt = $pdo->prepare("SELECT datasheet_url FROM buggies WHERE id = ?");
+            $stmt->execute([$id]);
+            $oldUrl = (string)$stmt->fetchColumn();
+            if ($oldUrl !== '') {
+                $oldPath = __DIR__ . '/../' . $oldUrl;
+                if (is_file($oldPath)) @unlink($oldPath);
+            }
+            $stmt = $pdo->prepare("UPDATE buggies SET datasheet_url = NULL WHERE id = ?");
+            $stmt->execute([$id]);
+            $success = 'Datasheet removed.';
+        } catch (PDOException $e) {
+            $error = 'Failed to remove datasheet: ' . $e->getMessage();
+        }
+    }
+
     if ($imageAction === 'upload_gallery') {
         try {
             $uploadedUrls = uploadGalleryImages($pdo, $id, $error);
@@ -358,10 +446,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product'])) {
     $activeTab = 'productInfoTab';
 
     foreach ($formData as $key => $value) {
-        if ($key === 'image_url' || $key === 'specifications') {
+        if ($key === 'image_url' || $key === 'specifications' || $key === 'datasheet_url') {
             continue;
         }
         $formData[$key] = trim($_POST[$key] ?? '');
+    }
+
+    $newDatasheetUrl = uploadDatasheetPdf($error);
+    if ($error === '' && $newDatasheetUrl !== '') {
+        $formData['datasheet_url'] = $newDatasheetUrl;
+    } elseif ($error === '' && $isEdit) {
+        // Keep whatever is already in DB if no new file uploaded
+        $formData['datasheet_url'] = $product['datasheet_url'] ?? '';
     }
 
     // Parse dynamic specifications
@@ -478,11 +574,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product'])) {
                         promo_label          = :promo_label,
                         tag = :tag,
                         brand_tag = :brand_tag,
-                        status = :status
+                        status = :status,
+                        datasheet_url = :datasheet_url
                     WHERE id = :id
                 ");
 
                 $stmt->execute([
+                    ':datasheet_url' => $formData['datasheet_url'] !== '' ? $formData['datasheet_url'] : null,
                     ':brand' => $brand,
                     ':model' => $model,
                     ':name' => $name,
@@ -506,6 +604,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product'])) {
                     ':status' => $status,
                     ':id' => $id
                 ]);
+
+                // Also upload any newly added gallery images on the same form submit
+                $uploadedUrls = uploadGalleryImages($pdo, $id, $error);
+                if ($error === '' && count($uploadedUrls) > 0) {
+                    $stmt = $pdo->prepare("SELECT image_url FROM buggies WHERE id = ?");
+                    $stmt->execute([$id]);
+                    $currentProduct = $stmt->fetch(PDO::FETCH_ASSOC);
+                    if ($currentProduct && trim((string)$currentProduct['image_url']) === '') {
+                        $stmt = $pdo->prepare("UPDATE buggies SET image_url = ? WHERE id = ?");
+                        $stmt->execute([$uploadedUrls[0], $id]);
+                    }
+                }
 
                 $success = 'Product information updated successfully.';
             } else {
@@ -535,7 +645,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product'])) {
                         image_url,
                         tag,
                         brand_tag,
-                        status
+                        status,
+                        datasheet_url
                     ) VALUES (
                         :owner_type,
                         :owner_id,
@@ -561,11 +672,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product'])) {
                         '',
                         :tag,
                         :brand_tag,
-                        :status
+                        :status,
+                        :datasheet_url
                     )
                 ");
 
                 $stmt->execute([
+                    ':datasheet_url' => $formData['datasheet_url'] !== '' ? $formData['datasheet_url'] : null,
                     ':owner_type' => 'admin',
                     ':owner_id' => $_SESSION['admin_id'],
                     ':brand' => $brand,
@@ -939,7 +1052,7 @@ include 'header.php';
 
     .gallery-grid {
         display: grid;
-        grid-template-columns: repeat(5, 180px);
+        grid-template-columns: repeat(4, 230px);
         gap: 20px;
         margin-bottom: 30px;
     }
@@ -978,6 +1091,25 @@ include 'header.php';
         transition: 0.2s ease;
     }
 
+    .gallery-card.is-primary {
+        border-color: #16a34a;
+        box-shadow: 0 0 0 2px #16a34a inset;
+    }
+
+    .primary-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: #16a34a;
+        color: #fff;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: bold;
+        height: 28px;
+        line-height: 1;
+    }
+
     .set-primary-btn {
         background: #7dd3e8;
     }
@@ -995,8 +1127,8 @@ include 'header.php';
     }
 
     .gallery-image {
-        width: 158px;
-        height: 158px;
+        width: 208px;
+        height: 208px;
         object-fit: cover;
         background: #fff;
         display: block;
@@ -1037,13 +1169,13 @@ include 'header.php';
     }
 
     .upload-card {
-        width: 180px;
+        width: 230px;
         position: relative;
     }
 
     .upload-box {
-        width: 180px;
-        height: 180px;
+        width: 230px;
+        height: 230px;
         background: #eef3f6;
         border: 1px solid #ddd;
         display: flex;
@@ -1087,8 +1219,8 @@ include 'header.php';
     }
 
     .preview-upload-img {
-        width: 180px;
-        height: 180px;
+        width: 230px;
+        height: 230px;
         object-fit: cover;
         border: 1px solid #ddd;
         display: block;
@@ -1169,7 +1301,7 @@ include 'header.php';
 
     @media (max-width: 1200px) {
         .gallery-grid {
-            grid-template-columns: repeat(4, 180px);
+            grid-template-columns: repeat(3, 230px);
         }
     }
 
@@ -1179,7 +1311,7 @@ include 'header.php';
         }
 
         .gallery-grid {
-            grid-template-columns: repeat(2, 180px);
+            grid-template-columns: repeat(2, 230px);
         }
 
         .upload-preview-area {
@@ -1279,6 +1411,10 @@ include 'header.php';
                 <button type="submit" class="action-btn" data-action="insert">Save and Upload</button>
                 <a href="product-list.php" class="action-btn action-btn-light">Cancel</a>
             </div>
+    <?php else: ?>
+        <form method="post" enctype="multipart/form-data" id="productForm">
+            <input type="hidden" name="save_product" value="1">
+            <input type="hidden" name="submit_action" id="submitActionInput" value="update">
     <?php endif; ?>
 
     <div class="product-tabs">
@@ -1300,11 +1436,6 @@ include 'header.php';
     </div>
 
     <div id="productInfoTab" class="tab-panel <?php echo $activeTab === 'productInfoTab' ? 'active' : ''; ?>">
-        <?php if ($isEdit): ?>
-            <form method="post" id="productForm">
-                <input type="hidden" name="save_product" value="1">
-                <input type="hidden" name="submit_action" id="submitActionInput" value="update">
-        <?php endif; ?>
 
         <div class="form-grid">
             <div class="section-title">Buggy Information</div>
@@ -1625,16 +1756,28 @@ include 'header.php';
                 <label>Product Description</label>
                 <textarea name="description" placeholder="Write product details here"><?php echo e($formData['description']); ?></textarea>
             </div>
+
+            <div class="section-title">Datasheet (PDF)</div>
+
+            <div class="form-group full">
+                <label>Product Datasheet (PDF, max 5MB)</label>
+                <?php if (!empty($formData['datasheet_url'])): ?>
+                    <div style="margin-bottom:10px;display:flex;align-items:center;gap:14px;">
+                        <a href="<?php echo e('../' . $formData['datasheet_url']); ?>" target="_blank" style="color:#ef3f4d;font-weight:600;">
+                            📄 View current datasheet
+                        </a>
+                        <button type="button"
+                                onclick="deleteDatasheet()"
+                                style="background:#ef3f4d;color:#fff;border:0;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;">
+                            Remove
+                        </button>
+                    </div>
+                <?php endif; ?>
+                <input type="file" name="datasheet_file" accept="application/pdf" style="display:flex;align-items:center;padding:10px 12px;">
+                <div class="help">Upload a PDF datasheet. Leave empty to keep the existing file.</div>
+            </div>
         </div>
 
-        <?php if ($isEdit): ?>
-            <div class="form-actions">
-                <button class="btn" type="submit" name="save_product" value="1">Save Changes</button>
-                <a href="product-list.php" class="btn btn-secondary">Cancel</a>
-            </div>
-
-            </form>
-        <?php endif; ?>
     </div>
 
     <div id="imageTab" class="tab-panel <?php echo $activeTab === 'imageTab' ? 'active' : ''; ?>">
@@ -1646,47 +1789,30 @@ include 'header.php';
                 </div>
             </div>
 
-            <div class="main-image-box">
-                <div class="main-image-title">Current Primary Image</div>
-
-                <img
-                    src="<?php echo e(productImagePath($formData['image_url'])); ?>"
-                    alt="Primary Image"
-                    class="main-image-preview"
-                    onerror="this.src='../images/no-image.png';"
-                >
-            </div>
-
             <?php if (count($galleryImages) > 0): ?>
                 <div class="gallery-grid">
                     <?php foreach ($galleryImages as $gallery): ?>
-                        <div class="gallery-card">
+                        <?php $isPrimary = trim((string)$gallery['image_url']) !== '' && trim((string)$gallery['image_url']) === trim((string)$formData['image_url']); ?>
+                        <div class="gallery-card<?php echo $isPrimary ? ' is-primary' : ''; ?>">
                             <div class="gallery-actions">
-                                <form method="post">
-                                    <input type="hidden" name="image_action" value="set_primary">
-                                    <input type="hidden" name="gallery_id" value="<?php echo (int)$gallery['id']; ?>">
-
+                                <?php if ($isPrimary): ?>
+                                    <span class="primary-badge">✓ Primary</span>
+                                <?php else: ?>
                                     <button
-                                        type="submit"
+                                        type="button"
                                         class="image-action-btn set-primary-btn"
-                                        onclick="return confirm('Set this image as primary image?');"
+                                        onclick="postGalleryAction('set_primary', <?php echo (int)$gallery['id']; ?>, 'Set this image as primary image?')"
                                     >
                                         + Set Primary
                                     </button>
-                                </form>
-
-                                <form method="post">
-                                    <input type="hidden" name="image_action" value="remove_gallery">
-                                    <input type="hidden" name="gallery_id" value="<?php echo (int)$gallery['id']; ?>">
-
-                                    <button
-                                        type="submit"
-                                        class="image-action-btn remove-btn"
-                                        onclick="return confirm('Remove this image?');"
-                                    >
-                                        Remove
-                                    </button>
-                                </form>
+                                <?php endif; ?>
+                                <button
+                                    type="button"
+                                    class="image-action-btn remove-btn"
+                                    onclick="postGalleryAction('remove_gallery', <?php echo (int)$gallery['id']; ?>, 'Remove this image?')"
+                                >
+                                    Remove
+                                </button>
                             </div>
 
                             <img
@@ -1702,8 +1828,6 @@ include 'header.php';
                 </div>
             <?php endif; ?>
 
-            <form method="post" enctype="multipart/form-data" id="imageUploadForm">
-                <input type="hidden" name="image_action" value="upload_gallery">
         <?php else: ?>
             <div class="image-tab-content">
         <?php endif; ?>
@@ -1749,25 +1873,50 @@ include 'header.php';
             </div>
             <?php endif; ?>
 
-        <?php if ($isEdit): ?>
-                <div class="image-form-actions">
-                    <button type="submit" class="btn">Save</button>
-                    <a href="product-list.php" class="btn btn-secondary">Cancel</a>
-                </div>
-            </form>
-        <?php endif; ?>
     </div>
 
-    <?php if (!$isEdit): ?>
-            <div class="bottom-actions">
-                <button type="submit" class="action-btn" data-action="insert">Save and Upload</button>
-                <a href="product-list.php" class="action-btn action-btn-light">Cancel</a>
-            </div>
+    <?php if ($isEdit): ?>
+        <div class="bottom-actions">
+            <button type="submit" class="action-btn">Save Changes</button>
+            <a href="product-list.php" class="action-btn action-btn-light">Cancel</a>
+        </div>
+        </form>
+    <?php else: ?>
+        <div class="bottom-actions">
+            <button type="submit" class="action-btn" data-action="insert">Save and Upload</button>
+            <a href="product-list.php" class="action-btn action-btn-light">Cancel</a>
+        </div>
         </form>
     <?php endif; ?>
 </div>
 
 <script>
+    function deleteDatasheet() {
+        if (!confirm('Remove the current datasheet PDF?')) return;
+        const f = document.createElement('form');
+        f.method = 'post';
+        f.action = window.location.href;
+        const a = document.createElement('input');
+        a.type = 'hidden'; a.name = 'image_action'; a.value = 'delete_datasheet';
+        f.appendChild(a);
+        document.body.appendChild(f);
+        f.submit();
+    }
+
+    function postGalleryAction(action, galleryId, confirmMsg) {
+        if (confirmMsg && !confirm(confirmMsg)) return;
+        const f = document.createElement('form');
+        f.method = 'post';
+        f.action = window.location.href;
+        const a = document.createElement('input');
+        a.type = 'hidden'; a.name = 'image_action'; a.value = action;
+        const g = document.createElement('input');
+        g.type = 'hidden'; g.name = 'gallery_id'; g.value = galleryId;
+        f.appendChild(a); f.appendChild(g);
+        document.body.appendChild(f);
+        f.submit();
+    }
+
     const tabButtons = document.querySelectorAll('.product-tab-btn');
     const tabPanels = document.querySelectorAll('.tab-panel');
     const submitActionInput = document.getElementById('submitActionInput');
