@@ -86,8 +86,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_banner'])) {
             $error = 'Only JPG, PNG, WEBP, and GIF images are allowed.';
         } elseif (!in_array($mimeType, $allowedMimeTypes, true)) {
             $error = 'Uploaded file is not a valid image.';
-        } elseif ($fileSize > 5 * 1024 * 1024) {
-            $error = 'Image must be below 5MB.';
+        } elseif ($fileSize > 10 * 1024 * 1024) {
+            $error = 'Image must be below 10MB.';
         } else {
             $safeName    = preg_replace('/[^a-zA-Z0-9-_]/', '-', pathinfo($originalName, PATHINFO_FILENAME));
             $newFileName = 'banner-' . $location . '-' . time() . '-' . rand(1000, 9999) . '.' . $extension;
@@ -282,9 +282,23 @@ include 'header.php';
 
         <div class="form-group full">
             <label><?php echo $isEdit ? 'Replace Image (optional)' : 'Banner Image *'; ?></label>
-            <input type="file" name="banner_image" accept=".jpg,.jpeg,.png,.webp,.gif" <?php echo !$isEdit ? 'required' : ''; ?>>
-            <div class="help">Recommended size: 1920 x 600px. Max 5MB. JPG, PNG, WEBP, GIF.</div>
+            <input type="file" name="banner_image" id="bannerImageInput" accept=".jpg,.jpeg,.png,.webp,.gif" <?php echo !$isEdit ? 'required' : ''; ?>>
+            <div class="help">Recommended size: 1920 x 600px. Max 10MB. JPG, PNG, WEBP, GIF.</div>
         </div>
+
+        <script>
+            (function () {
+                const input = document.getElementById('bannerImageInput');
+                if (!input) return;
+                const MAX = 10 * 1024 * 1024; // 10MB
+                input.addEventListener('change', function () {
+                    if (this.files && this.files[0] && this.files[0].size > MAX) {
+                        alert('Image "' + this.files[0].name + '" is too large (' + (this.files[0].size / 1024 / 1024).toFixed(1) + 'MB). Max size is 10MB.');
+                        this.value = '';
+                    }
+                });
+            })();
+        </script>
 
         <div class="form-actions">
             <button type="submit" class="btn">

@@ -26,9 +26,6 @@ if ($is_seller_logged_in) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SGBUGGYMART</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
     <style>
         :root {
@@ -58,10 +55,12 @@ if ($is_seller_logged_in) {
         a,
         h1, h2, h3, h4, h5, h6,
         p, span, label, li, td, th {
-            font-family: 'Poppins', Arial, Helvetica, sans-serif;
+            font-family: Graphik, system-ui, sans-serif;
         }
 
         body {
+            font-family: Graphik, system-ui, sans-serif;
+            font-size: 16px;
             color: var(--dark);
             background: #ffffff;
         }
@@ -96,19 +95,13 @@ if ($is_seller_logged_in) {
         .brand-logo {
             display: inline-flex;
             align-items: center;
-            font-size: 27px;
-            font-weight: 900;
-            letter-spacing: -1.4px;
-            font-style: italic;
             white-space: nowrap;
         }
 
-        .brand-main {
-            color: #333333;
-        }
-
-        .brand-accent {
-            color: #1ca0e6;
+        .brand-logo img {
+            height: 38px;
+            width: auto;
+            display: block;
         }
 
         .header-actions {
@@ -131,12 +124,12 @@ if ($is_seller_logged_in) {
         }
 
         .mini-search {
-            width: 300px;
-            height: 38px;
+            width: 320px;
+            height: 42px;
             display: flex;
             align-items: center;
             background: #f5f5f5;
-            border-radius: 5px;
+            border-radius: 999px;
             overflow: hidden;
         }
 
@@ -147,7 +140,7 @@ if ($is_seller_logged_in) {
             outline: 0;
             background: transparent;
             padding: 0 12px;
-            font-size: 14px;
+            font-size: 15px;
         }
 
         .mini-search button {
@@ -166,7 +159,7 @@ if ($is_seller_logged_in) {
             align-items: center;
             gap: 8px;
             color: #333333;
-            font-size: 14px;
+            font-size: 15px;
             white-space: nowrap;
             line-height: 1;
         }
@@ -316,7 +309,7 @@ if ($is_seller_logged_in) {
             align-items: center;
             justify-content: space-between;
             gap: 26px;
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 700;
             padding-top: 15px;
             padding-bottom: 22px;
@@ -327,7 +320,7 @@ if ($is_seller_logged_in) {
         }
 
         .header-contact-link {
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 700;
             white-space: nowrap;
             margin-right: 15px;
@@ -920,9 +913,11 @@ if ($is_seller_logged_in) {
             }
 
             .brand-logo {
-                font-size: 25px;
-                letter-spacing: -1.5px;
                 flex-shrink: 0;
+            }
+
+            .brand-logo img {
+                height: 32px;
             }
 
             .header-actions {
@@ -989,9 +984,8 @@ if ($is_seller_logged_in) {
                 padding: 0 16px;
             }
 
-            .brand-logo {
-                font-size: 22px;
-                letter-spacing: -1.3px;
+            .brand-logo img {
+                height: 26px;
             }
 
             .mobile-login-pill {
@@ -1019,9 +1013,7 @@ if ($is_seller_logged_in) {
         <div class="header-inner">
             <div class="header-top">
                 <a href="/index.php" class="brand-logo">
-                    <span class="brand-main">SG</span>
-                    <span class="brand-accent">BUGGY</span>
-                    <span class="brand-main">MART</span>
+                    <img src="/images/sgbuggymart_logo.png" alt="SGBUGGYMART.COM" onerror="this.style.display='none';">
                 </a>
 
                 <div class="header-actions">
