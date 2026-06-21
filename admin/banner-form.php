@@ -135,8 +135,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_banner'])) {
                 $success = 'Banner updated successfully.';
             } else {
                 $stmt = $pdo->prepare("
-                    INSERT INTO banners (location, title, subtitle, link_url, sort_order, status, image_url, created_at, updated_at)
-                    VALUES (:location, :title, :subtitle, :link_url, :sort_order, :status, :image_url, NOW(), NOW())
+                    INSERT INTO banners (type, location, title, subtitle, link_url, sort_order, status, image_url, created_at, updated_at)
+                    VALUES ('banner', :location, :title, :subtitle, :link_url, :sort_order, :status, :image_url, NOW(), NOW())
                 ");
                 $stmt->execute([
                     ':location'   => $location,

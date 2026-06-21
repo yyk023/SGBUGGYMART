@@ -113,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['id'
 
 $locationFilter = $_GET['location'] ?? 'all';
 
-$sql    = "SELECT * FROM banners WHERE 1=1";
+$sql    = "SELECT * FROM banners WHERE type = 'banner'";
 $params = [];
 
 if ($locationFilter !== 'all') {

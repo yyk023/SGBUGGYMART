@@ -31,7 +31,7 @@ $accessoryPages = [
 $isProductPage   = in_array($currentPage, $productPages, true);
 $isSellerPage    = in_array($currentPage, $sellerPages, true);
 $isAccessoryPage = in_array($currentPage, $accessoryPages, true);
-$bannerPages = ['banner-list.php', 'banner-form.php'];
+$bannerPages = ['banner-list.php', 'banner-form.php', 'ad-list.php', 'ad-form.php'];
 
 $isProductListPage = in_array($currentPage, [
     'product-list.php',
@@ -676,12 +676,25 @@ $isProductBrandPage = $currentPage === 'product-brand.php';
                 </span>
             </a>
 
-               <a href="banner-list.php" class="<?php echo in_array($currentPage, ['banner-list.php','banner-form.php']) ? 'active' : ''; ?>">
-                <span class="menu-label">
-                    <span class="menu-icon">🖼️</span>
-                    <span>Banners</span>
-                </span>
-            </a>
+            <div class="menu-group <?php echo in_array($currentPage, ['banner-list.php','banner-form.php','ad-list.php','ad-form.php']) ? 'open' : ''; ?>">
+                <button type="button" class="menu-parent">
+                    <span class="menu-label">
+                        <span class="menu-icon">🖼️</span>
+                        <span>Banner &amp; Ads</span>
+                    </span>
+                    <span class="menu-arrow">▾</span>
+                    <span role="button" class="collapsed-expand-btn" title="Open menu">›</span>
+                </button>
+
+                <div class="submenu">
+                    <a href="banner-list.php" class="<?php echo in_array($currentPage, ['banner-list.php','banner-form.php']) ? 'active' : ''; ?>">
+                        Banners
+                    </a>
+                    <a href="ad-list.php" class="<?php echo in_array($currentPage, ['ad-list.php','ad-form.php']) ? 'active' : ''; ?>">
+                        Ads
+                    </a>
+                </div>
+            </div>
             
             <div class="menu-group <?php echo $isAccessoryPage ? 'open' : ''; ?>">
                 <button type="button" class="menu-parent">

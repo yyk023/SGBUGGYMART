@@ -356,6 +356,126 @@ $filterYearEnd      = $filterYearStart - 15;
         margin-bottom: 22px;
     }
 
+    /* Share button + menu */
+    .share-wrap {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .share-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 40px;
+        padding: 0 16px;
+        border: 1px solid #d8dde4;
+        background: #fff;
+        color: #1f2937;
+        border-radius: 999px;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.2s ease;
+    }
+
+    .share-btn:hover {
+        border-color: #0066cc;
+        color: #0066cc;
+    }
+
+    .share-menu {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        min-width: 200px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+        z-index: 100;
+        padding: 8px;
+        display: none;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .share-menu.active {
+        display: flex;
+    }
+
+    .share-opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 700;
+        color: #1f2937;
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+        transition: 0.15s ease;
+        text-align: left;
+        width: 100%;
+    }
+
+    .share-opt:hover {
+        background: #f3f4f6;
+    }
+
+    .share-whatsapp { color: #25d366; }
+    .share-copy     { color: #6b7280; }
+
+    .share-copy.copied {
+        background: #dcfce7 !important;
+        color: #166534;
+    }
+
+    /* Mobile-only icon share button next to price */
+    .price-row-mobile {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .share-wrap-mobile {
+        display: none;
+        margin-right: 14px;
+    }
+    .share-icon-btn {
+        width: 48px;
+        height: 48px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: #1f2937;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: 0.2s ease;
+        padding: 0;
+    }
+    .share-icon-btn svg {
+        width: 26px;
+        height: 26px;
+    }
+    .share-icon-btn:hover {
+        background: #f3f4f6;
+        color: #0066cc;
+    }
+    .share-menu-mobile {
+        right: 0;
+    }
+
+    @media (max-width: 900px) {
+        /* On mobile, hide the title-row Share button and show the icon one */
+        .detail-title-row .share-wrap:not(.share-wrap-mobile) { display: none; }
+        .share-wrap-mobile { display: block; }
+    }
+
     .detail-title {
         font-size: 22px;
         font-weight: 800;
@@ -624,8 +744,11 @@ $filterYearEnd      = $filterYearStart - 15;
         top: 0;
         background: #ffffff;
         z-index: 90;
-        padding-top: 14px;
+        padding-top: 8px;
         padding-bottom: 0;
+        /* Extend white background full-width so no blank edges on mobile */
+        box-shadow: -100vw 0 0 #ffffff, 100vw 0 0 #ffffff;
+        clip-path: inset(0 -100vw);
     }
 
     .detail-tabs a {
@@ -1530,6 +1653,27 @@ $filterYearEnd      = $filterYearStart - 15;
 
     <div class="detail-title-row">
         <h1 class="detail-title"><?php echo htmlspecialchars($title); ?></h1>
+
+        <div class="share-wrap">
+            <button type="button" class="share-btn" id="shareBtn" aria-label="Share this buggy">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                </svg>
+                <span>Share</span>
+            </button>
+
+            <div class="share-menu" id="shareMenu">
+                <a class="share-opt share-whatsapp" id="shareWhatsapp" target="_blank" rel="noopener">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 6.32A7.85 7.85 0 0 0 12.05 4a7.94 7.94 0 0 0-6.88 11.9L4 20l4.22-1.1a7.93 7.93 0 0 0 3.82.98h.01a7.94 7.94 0 0 0 5.55-13.56zm-5.55 12.21h-.01a6.6 6.6 0 0 1-3.36-.92l-.24-.14-2.5.66.67-2.44-.16-.25a6.59 6.59 0 1 1 12.23-3.5 6.6 6.6 0 0 1-6.63 6.59zm3.62-4.94c-.2-.1-1.18-.58-1.36-.65-.18-.07-.31-.1-.45.1-.13.2-.5.65-.62.78-.11.13-.23.15-.43.05-.2-.1-.84-.31-1.6-1-.59-.53-.99-1.18-1.1-1.38-.12-.2-.01-.31.09-.41.09-.09.2-.23.3-.35.1-.12.13-.2.2-.33.07-.13.03-.25-.02-.35-.05-.1-.45-1.08-.62-1.48-.16-.39-.33-.34-.45-.34h-.39c-.13 0-.35.05-.53.25-.18.2-.7.69-.7 1.68 0 .99.72 1.94.82 2.07.1.13 1.41 2.15 3.42 3.02.48.21.85.33 1.14.42.48.15.91.13 1.26.08.38-.06 1.18-.48 1.34-.95.17-.47.17-.86.12-.95-.05-.09-.18-.13-.38-.23z"/></svg>
+                    <span>WhatsApp</span>
+                </a>
+                <button type="button" class="share-opt share-copy" id="shareCopy">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    <span id="shareCopyLabel">Copy Link</span>
+                </button>
+            </div>
+        </div>
     </div>
 
     <nav class="detail-tabs">
@@ -1612,12 +1756,35 @@ $filterYearEnd      = $filterYearStart - 15;
                     You save $<?php echo number_format((float)$price - (float)$buggy['discount_price'], 0); ?>
                 </div>
             <?php else: ?>
-                <div class="price">
-                    <?php if ((float) $price > 0): ?>
-                        $<?php echo number_format((float) $price, 0); ?>
-                    <?php else: ?>
-                        Price on request
-                    <?php endif; ?>
+                <div class="price-row-mobile">
+                    <div class="price">
+                        <?php if ((float) $price > 0): ?>
+                            $<?php echo number_format((float) $price, 0); ?>
+                        <?php else: ?>
+                            Price on request
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Mobile share icon (right of price) -->
+                    <div class="share-wrap share-wrap-mobile">
+                        <button type="button" class="share-icon-btn" id="shareBtnMobile" aria-label="Share">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                            </svg>
+                        </button>
+
+                        <div class="share-menu share-menu-mobile" id="shareMenuMobile">
+                            <a class="share-opt share-whatsapp" id="shareWhatsappMobile" target="_blank" rel="noopener">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 6.32A7.85 7.85 0 0 0 12.05 4a7.94 7.94 0 0 0-6.88 11.9L4 20l4.22-1.1a7.93 7.93 0 0 0 3.82.98h.01a7.94 7.94 0 0 0 5.55-13.56zm-5.55 12.21h-.01a6.6 6.6 0 0 1-3.36-.92l-.24-.14-2.5.66.67-2.44-.16-.25a6.59 6.59 0 1 1 12.23-3.5 6.6 6.6 0 0 1-6.63 6.59z"/></svg>
+                                <span>WhatsApp</span>
+                            </a>
+                            <button type="button" class="share-opt share-copy" id="shareCopyMobile">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                <span id="shareCopyLabelMobile">Copy Link</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="monthly">
@@ -2263,15 +2430,77 @@ $filterYearEnd      = $filterYearStart - 15;
         // Note: Auto-scroll-to-gallery on entry removed — page now opens at the top
     });
 
-    // Dynamically set sticky tabs `top` to match the actual topbar height (no gap)
+    /* ========== Share button (WhatsApp + Copy Link) — desktop + mobile ========== */
+    (function () {
+        const pageUrl   = window.location.origin + window.location.pathname + '?id=<?php echo (int)$id; ?>';
+        const pageTitle = <?php echo json_encode($title); ?>;
+        const shareText = pageTitle + ' - SGBUGGYMART';
+
+        function bindShare(btnId, menuId, waId, copyId, copyLabelId) {
+            const shareBtn  = document.getElementById(btnId);
+            const shareMenu = document.getElementById(menuId);
+            if (!shareBtn || !shareMenu) return;
+
+            const waLink = document.getElementById(waId);
+            if (waLink) waLink.href = 'https://wa.me/?text=' + encodeURIComponent(shareText + '\n' + pageUrl);
+
+            shareBtn.addEventListener('click', async function (e) {
+                e.stopPropagation();
+                if (navigator.share && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+                    try {
+                        await navigator.share({ title: pageTitle, text: shareText, url: pageUrl });
+                        return;
+                    } catch (err) { /* fall back to menu */ }
+                }
+                shareMenu.classList.toggle('active');
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!shareMenu.contains(e.target) && e.target !== shareBtn) {
+                    shareMenu.classList.remove('active');
+                }
+            });
+
+            const copyBtn   = document.getElementById(copyId);
+            const copyLabel = document.getElementById(copyLabelId);
+            if (copyBtn && copyLabel) {
+                copyBtn.addEventListener('click', async function () {
+                    try {
+                        await navigator.clipboard.writeText(pageUrl);
+                        copyBtn.classList.add('copied');
+                        copyLabel.textContent = '✓ Copied!';
+                        setTimeout(function () {
+                            copyBtn.classList.remove('copied');
+                            copyLabel.textContent = 'Copy Link';
+                        }, 2000);
+                    } catch (err) {
+                        alert('Link: ' + pageUrl);
+                    }
+                });
+            }
+        }
+
+        // Desktop share (title row)
+        bindShare('shareBtn',       'shareMenu',       'shareWhatsapp',       'shareCopy',       'shareCopyLabel');
+        // Mobile share (next to price)
+        bindShare('shareBtnMobile', 'shareMenuMobile', 'shareWhatsappMobile', 'shareCopyMobile', 'shareCopyLabelMobile');
+    })();
+
+    // Dynamically set sticky tabs `top` to match the actual topbar height (no gap, no overlap)
     function syncStickyTabsTop() {
         const topbar = document.querySelector('.topbar');
         const tabs   = document.querySelector('.detail-tabs');
         if (!topbar || !tabs) return;
-        tabs.style.top = topbar.offsetHeight + 'px';
+        tabs.style.top = Math.round(topbar.getBoundingClientRect().height) + 'px';
     }
+    syncStickyTabsTop();
+    window.addEventListener('DOMContentLoaded', syncStickyTabsTop);
     window.addEventListener('load',   syncStickyTabsTop);
     window.addEventListener('resize', syncStickyTabsTop);
+    if (window.ResizeObserver) {
+        const topbarEl = document.querySelector('.topbar');
+        if (topbarEl) new ResizeObserver(syncStickyTabsTop).observe(topbarEl);
+    }
 
     updateThumbSlider();
 </script>

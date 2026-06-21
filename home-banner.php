@@ -172,9 +172,23 @@ $priceRangeOptions = [5000, 8000, 10000, 12000, 15000, 18000, 20000];
     .buggy-hero-content { max-width: 1100px; margin: 0 auto; }
 
     .buggy-hero-label {
-        margin: 0 0 14px; color: #eef5dd;
-        font-size: 20px; font-weight: 800;
-        letter-spacing: 2px; text-transform: uppercase;
+        display: inline-block;
+        margin: 0 0 18px;
+        padding: 8px 22px;
+        background: linear-gradient(135deg, #ef3f4d, #f97316);
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        border-radius: 999px;
+        box-shadow: 0 6px 20px rgba(239, 63, 77, 0.45);
+        animation: heroLabelPulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes heroLabelPulse {
+        0%, 100% { transform: scale(1); box-shadow: 0 6px 20px rgba(239, 63, 77, 0.45); }
+        50%      { transform: scale(1.05); box-shadow: 0 8px 28px rgba(239, 63, 77, 0.65); }
     }
 
     .buggy-hero h1 { margin: 0 0 18px; font-size: clamp(30px, 3.8vw, 56px); line-height: 1.1; font-weight: 900; }

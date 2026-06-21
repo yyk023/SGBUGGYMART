@@ -30,6 +30,21 @@ function e($value)
 {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
+
+// Fetch ALL active side ads for "side_brands" location
+$brandsSideAds = [];
+try {
+    $stmt = $pdo->prepare("
+        SELECT * FROM banners
+        WHERE type = 'ad' AND location = 'side_brands' AND status = 'active'
+        ORDER BY sort_order ASC, id ASC
+        LIMIT 5
+    ");
+    $stmt->execute();
+    $brandsSideAds = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $brandsSideAds = [];
+}
 ?>
 
 <section class="home-brand-section">
@@ -57,13 +72,61 @@ function e($value)
                 <?php endif; ?>
             </div>
 
-            <div class="home-brand-ad">
-                <div class="brand-ad-content">
-                    <p>SGBUGGYMART</p>
-                    <h3>New & Used Buggy Available</h3>
-                    <span>For sale, events, resorts & commercial use</span>
+            <?php if (count($brandsSideAds) > 0): ?>
+                <div class="home-brand-ad-slider" id="brandsAdSlider">
+                    <div class="brand-ad-slides">
+                        <?php foreach ($brandsSideAds as $idx => $ad):
+                            $adImg = $ad['image_url'];
+                            if (strpos($adImg, 'http') !== 0 && strpos($adImg, '/') !== 0) {
+                                $adImg = '/' . ltrim($adImg, '/');
+                            }
+                            $hasLink = !empty($ad['link_url']);
+                        ?>
+                            <div class="brand-ad-slide <?php echo $idx === 0 ? 'active' : ''; ?>" data-index="<?php echo $idx; ?>">
+                                <?php if ($hasLink): ?>
+                                    <a href="<?php echo e($ad['link_url']); ?>" target="_blank" rel="noopener">
+                                        <img src="<?php echo e($adImg); ?>" alt="<?php echo e($ad['title'] ?: 'Ad'); ?>">
+                                    </a>
+                                <?php else: ?>
+                                    <img src="<?php echo e($adImg); ?>" alt="<?php echo e($ad['title'] ?: 'Ad'); ?>">
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <div class="brand-ad-controls">
+                        <?php if (count($brandsSideAds) > 1): ?>
+                            <button type="button" class="brand-ad-arrow prev" id="brandsAdPrev" aria-label="Previous">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                            </button>
+                        <?php endif; ?>
+
+                        <div class="brand-ad-dots">
+                            <?php foreach ($brandsSideAds as $idx => $ad): ?>
+                                <button type="button" class="brand-ad-dot <?php echo $idx === 0 ? 'active' : ''; ?>" data-index="<?php echo $idx; ?>" aria-label="Go to slide <?php echo $idx + 1; ?>"></button>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <?php if (count($brandsSideAds) > 1): ?>
+                            <button type="button" class="brand-ad-arrow next" id="brandsAdNext" aria-label="Next">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
-            </div>
+            <?php else: ?>
+                <div class="home-brand-ad">
+                    <div class="brand-ad-content">
+                        <p>SGBUGGYMART</p>
+                        <h3>New & Used Buggy Available</h3>
+                        <span>For sale, events, resorts & commercial use</span>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
 
         <p class="selected-brand-text" id="selectedBrandText">
@@ -179,6 +242,109 @@ function e($value)
         font-size: 14px;
     }
 
+    .home-brand-ad-slider {
+        position: relative;
+        margin-top: -25px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        background: transparent;
+    }
+
+    .brand-ad-slides {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .brand-ad-slide {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transition: opacity 0.5s ease;
+        pointer-events: none;
+    }
+
+    .brand-ad-slide.active {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .brand-ad-slide img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .brand-ad-slide a {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+
+    /* Controls row BELOW the image — bottom-aligned: < ··●·· > */
+    .brand-ad-controls {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 14px;
+        padding: 4px 0 0;
+    }
+
+    .brand-ad-arrow {
+        position: static;
+        transform: none;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: #111827;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: 0.2s ease;
+        padding: 0;
+    }
+
+    .brand-ad-arrow svg {
+        width: 22px;
+        height: 22px;
+        display: block;
+    }
+
+    .brand-ad-dots {
+        position: static;
+        transform: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+    }
+
+    .brand-ad-dot {
+        width: 10px;
+        height: 10px;
+        border: 0;
+        border-radius: 50%;
+        background: #d1d5db;
+        cursor: pointer;
+        transition: 0.2s ease;
+        padding: 0;
+        display: block;
+        vertical-align: middle;
+    }
+
+    .brand-ad-dot.active {
+        background: #ef3f4d;
+        width: 24px;
+        border-radius: 999px;
+    }
+
     .home-brand-ad {
         margin-top: -25px;
         min-height: 170px;
@@ -265,6 +431,58 @@ function e($value)
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    /* Side ads slider */
+    (function () {
+        const slider = document.getElementById('brandsAdSlider');
+        if (!slider) return;
+
+        const slides = slider.querySelectorAll('.brand-ad-slide');
+        const dots   = slider.querySelectorAll('.brand-ad-dot');
+        const prev   = document.getElementById('brandsAdPrev');
+        const next   = document.getElementById('brandsAdNext');
+
+        if (slides.length <= 1) return;
+
+        let current = 0;
+        let timer = null;
+
+        function showSlide(idx) {
+            slides.forEach(s => s.classList.remove('active'));
+            dots.forEach(d => d.classList.remove('active'));
+            slides[idx].classList.add('active');
+            if (dots[idx]) dots[idx].classList.add('active');
+            current = idx;
+        }
+
+        function nextSlide() { showSlide((current + 1) % slides.length); }
+        function prevSlide() { showSlide((current - 1 + slides.length) % slides.length); }
+
+        function startAuto() {
+            stopAuto();
+            timer = setInterval(nextSlide, 5000);
+        }
+        function stopAuto() {
+            if (timer) clearInterval(timer);
+            timer = null;
+        }
+
+        if (prev) prev.addEventListener('click', function () { prevSlide(); startAuto(); });
+        if (next) next.addEventListener('click', function () { nextSlide(); startAuto(); });
+
+        dots.forEach(function (dot) {
+            dot.addEventListener('click', function () {
+                const idx = parseInt(this.dataset.index, 10) || 0;
+                showSlide(idx);
+                startAuto();
+            });
+        });
+
+        slider.addEventListener('mouseenter', stopAuto);
+        slider.addEventListener('mouseleave', startAuto);
+
+        startAuto();
+    })();
+
     const popularBrands = <?php echo json_encode(array_values($popularBrands)); ?>;
     const allBrands = <?php echo json_encode(array_values($allBrands)); ?>;
 
