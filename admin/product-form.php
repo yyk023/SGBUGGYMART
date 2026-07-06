@@ -1550,6 +1550,7 @@ include 'header.php';
                 <div class="help">The normal price (e.g. 5000). During a promo this is shown crossed out.</div>
             </div>
 
+            <?php if (false): /* Limited Time Promo hidden — flip to true to re-enable */ ?>
             <div class="section-title">🔥 Limited Time Promo</div>
 
             <div class="form-group full">
@@ -1606,6 +1607,7 @@ include 'header.php';
                     }
                 })();
             </script>
+            <?php endif; /* end Limited Time Promo block */ ?>
 
            <div class="section-title">Sort Order</div>
 

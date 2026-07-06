@@ -1,5 +1,5 @@
 <?php
-// TEMP DEBUG — remove after fixing
+// TEMP DEBUG &mdash; remove after fixing
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -36,9 +36,9 @@ function accImagePath($imageUrl)
 $message = '';
 $error   = '';
 
-if (isset($_GET['added'])   && $_GET['added']   === '1') $message = 'Accessory added successfully.';
-if (isset($_GET['updated']) && $_GET['updated'] === '1') $message = 'Accessory updated successfully.';
-if (isset($_GET['deleted']) && $_GET['deleted'] === '1') $message = 'Accessory deleted successfully.';
+if (isset($_GET['added'])   && $_GET['added']   === '1') $message = 'Automotive added successfully.';
+if (isset($_GET['updated']) && $_GET['updated'] === '1') $message = 'Automotive updated successfully.';
+if (isset($_GET['deleted']) && $_GET['deleted'] === '1') $message = 'Automotive deleted successfully.';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['id'])) {
     $id     = (int)$_POST['id'];
@@ -46,9 +46,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['id'
 
     if ($id > 0 && in_array($action, ['active', 'inactive'], true)) {
         try {
-            $stmt = $pdo->prepare("UPDATE accessories SET status = ? WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE automotive SET status = ? WHERE id = ?");
             $stmt->execute([$action, $id]);
-            header('Location: accessory-list.php?updated=1');
+            header('Location: automotive-list.php?updated=1');
             exit;
         } catch (PDOException $e) {
             $error = 'Failed to update status: ' . $e->getMessage();
@@ -57,14 +57,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['id'
 
     if ($id > 0 && $action === 'delete') {
         try {
-            $stmt = $pdo->prepare("DELETE FROM accessory_images WHERE accessory_id = ?");
+            $stmt = $pdo->prepare("DELETE FROM automotive_images WHERE automotive_id = ?");
             $stmt->execute([$id]);
-            $stmt = $pdo->prepare("DELETE FROM accessories WHERE id = ?");
+            $stmt = $pdo->prepare("DELETE FROM automotive WHERE id = ?");
             $stmt->execute([$id]);
-            header('Location: accessory-list.php?deleted=1');
+            header('Location: automotive-list.php?deleted=1');
             exit;
         } catch (PDOException $e) {
-            $error = 'Failed to delete accessory: ' . $e->getMessage();
+            $error = 'Failed to delete automotive: ' . $e->getMessage();
         }
     }
 }
@@ -75,7 +75,7 @@ $categoryFilter = trim($_GET['category'] ?? '');
 
 $accCategoryOptions = ['Batteries', 'Tyres', 'Mechanical Parts', 'Electrical Parts', 'Others'];
 
-$sql    = "SELECT * FROM accessories WHERE 1=1";
+$sql    = "SELECT * FROM automotive WHERE 1=1";
 $params = [];
 
 if ($keyword !== '') {
@@ -99,10 +99,10 @@ $sql .= " ORDER BY created_at DESC, id DESC";
 try {
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
-    $accessories = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $automotive = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    $accessories = [];
-    $error = 'Failed to load accessories: ' . $e->getMessage();
+    $automotive = [];
+    $error = 'Failed to load automotive: ' . $e->getMessage();
 }
 
 /* Count active advanced filters (for the badge) */
@@ -495,14 +495,14 @@ include 'header.php';
 
 <div class="list-header">
     <div>
-        <h1>Accessories</h1>
-        <p>Manage all accessory listings.</p>
+        <h1>Automotive</h1>
+        <p>Manage all automotive listings.</p>
     </div>
-    <a href="accessory-form.php" class="btn">+ Add Accessory</a>
+    <a href="automotive-form.php" class="btn">+ Add Automotive</a>
 </div>
 
 <div class="filter-card">
-    <form class="filter-form" method="get" action="accessory-list.php" id="adminFilterForm">
+    <form class="filter-form" method="get" action="automotive-list.php" id="adminFilterForm">
         <div class="keyword-wrap">
             <input
                 type="text"
@@ -520,13 +520,13 @@ include 'header.php';
             <?php endif; ?>
         </button>
 
-        <a href="accessory-list.php" class="btn">Clear</a>
+        <a href="automotive-list.php" class="btn">Clear</a>
 
         <!-- ===================== ADMIN FILTER MODAL ===================== -->
         <div class="admin-filter-overlay" id="adminFilterOverlay">
             <div class="admin-filter-modal">
                 <div class="afm-header">
-                    <h2>Filter Accessories</h2>
+                    <h2>Filter Automotive</h2>
                     <button type="button" class="afm-close" id="closeAdminFilter" aria-label="Close">&times;</button>
                 </div>
 
@@ -590,8 +590,8 @@ include 'header.php';
 
 <div class="table-card">
     <div class="table-top">
-        <strong>Accessory List</strong>
-        <span><?php echo count($accessories); ?> record(s) found</span>
+        <strong>Automotive List</strong>
+        <span><?php echo count($automotive); ?> record(s) found</span>
     </div>
 
     <div class="table-scroll">
@@ -610,8 +610,8 @@ include 'header.php';
                 </tr>
             </thead>
             <tbody>
-                <?php if (count($accessories) > 0): ?>
-                    <?php foreach ($accessories as $item): ?>
+                <?php if (count($automotive) > 0): ?>
+                    <?php foreach ($automotive as $item): ?>
                         <tr>
                             <td>
                                 <img
@@ -644,7 +644,7 @@ include 'header.php';
                             </td>
                             <td>
                                 <div class="row-actions">
-                                    <a href="accessory-form.php?id=<?php echo (int)$item['id']; ?>" class="row-btn btn-edit">Edit</a>
+                                    <a href="automotive-form.php?id=<?php echo (int)$item['id']; ?>" class="row-btn btn-edit">Edit</a>
 
                                     <?php if (($item['status'] ?? '') === 'active'): ?>
                                         <form method="post" style="display:inline;">
@@ -669,7 +669,7 @@ include 'header.php';
                                         <button
                                             type="submit"
                                             class="row-btn btn-delete"
-                                            onclick="return confirm('Delete this accessory? This cannot be undone.');"
+                                            onclick="return confirm('Delete this automotive? This cannot be undone.');"
                                         >Delete</button>
                                     </form>
                                 </div>
@@ -680,8 +680,8 @@ include 'header.php';
                     <tr>
                         <td colspan="9">
                             <div class="empty-state">
-                                <div style="font-size:48px;">🔧</div>
-                                <p>No accessories found. <a href="accessory-form.php" style="color:#ef3f4d;">Add the first one</a>.</p>
+                                <div style="font-size:48px;">&#128295;</div>
+                                <p>No automotive found. <a href="automotive-form.php" style="color:#ef3f4d;">Add the first one</a>.</p>
                             </div>
                         </td>
                     </tr>

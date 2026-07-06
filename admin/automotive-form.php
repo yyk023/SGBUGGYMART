@@ -130,7 +130,7 @@ function uploadAccDatasheetPdf(&$error)
     return 'uploads/datasheets/' . $newFileName;
 }
 
-function uploadAccImages($pdo, $accessoryId, &$error)
+function uploadAccImages($pdo, $automotiveId, &$error)
 {
     if (!isset($_FILES['gallery_images']) || empty($_FILES['gallery_images']['name'][0])) {
         return [];
@@ -188,8 +188,8 @@ function uploadAccImages($pdo, $accessoryId, &$error)
 
         $imageUrl = 'images/' . $newFileName;
 
-        $stmt = $pdo->prepare("INSERT INTO accessory_images (accessory_id, image_url) VALUES (:accessory_id, :image_url)");
-        $stmt->execute([':accessory_id' => $accessoryId, ':image_url' => $imageUrl]);
+        $stmt = $pdo->prepare("INSERT INTO automotive_images (automotive_id, image_url) VALUES (:automotive_id, :image_url)");
+        $stmt->execute([':automotive_id' => $automotiveId, ':image_url' => $imageUrl]);
 
         $uploadedUrls[] = $imageUrl;
     }
@@ -224,12 +224,12 @@ $product       = null;
 $galleryImages = [];
 
 if ($isEdit) {
-    $stmt = $pdo->prepare("SELECT * FROM accessories WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM automotive WHERE id = ?");
     $stmt->execute([$id]);
     $product = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$product) {
-        die('Accessory not found.');
+        die('Automotive not found.');
     }
 
     foreach ($formData as $key => $value) {
@@ -240,7 +240,7 @@ if ($isEdit) {
 }
 
 if (isset($_GET['added']) && $_GET['added'] === '1') {
-    $success = 'Accessory added successfully.';
+    $success = 'Automotive added successfully.';
 }
 
 /* â”€â”€ Image actions (edit mode) â”€â”€ */
@@ -253,12 +253,12 @@ if ($isEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['image_acti
 
         if ($galleryId > 0) {
             try {
-                $stmt = $pdo->prepare("SELECT image_url FROM accessory_images WHERE id = ? AND accessory_id = ?");
+                $stmt = $pdo->prepare("SELECT image_url FROM automotive_images WHERE id = ? AND automotive_id = ?");
                 $stmt->execute([$galleryId, $id]);
                 $galleryImage = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 if ($galleryImage) {
-                    $stmt = $pdo->prepare("UPDATE accessories SET image_url = ? WHERE id = ?");
+                    $stmt = $pdo->prepare("UPDATE automotive SET image_url = ? WHERE id = ?");
                     $stmt->execute([$galleryImage['image_url'], $id]);
                     $success = 'Primary image updated successfully.';
                 } else {
@@ -275,7 +275,7 @@ if ($isEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['image_acti
 
         if ($galleryId > 0) {
             try {
-                $stmt = $pdo->prepare("DELETE FROM accessory_images WHERE id = ? AND accessory_id = ?");
+                $stmt = $pdo->prepare("DELETE FROM automotive_images WHERE id = ? AND automotive_id = ?");
                 $stmt->execute([$galleryId, $id]);
                 $success = 'Image removed successfully.';
             } catch (PDOException $e) {
@@ -286,14 +286,14 @@ if ($isEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['image_acti
 
     if ($imageAction === 'delete_datasheet') {
         try {
-            $stmt = $pdo->prepare("SELECT datasheet_url FROM accessories WHERE id = ?");
+            $stmt = $pdo->prepare("SELECT datasheet_url FROM automotive WHERE id = ?");
             $stmt->execute([$id]);
             $oldUrl = (string)$stmt->fetchColumn();
             if ($oldUrl !== '') {
                 $oldPath = __DIR__ . '/../' . $oldUrl;
                 if (is_file($oldPath)) @unlink($oldPath);
             }
-            $stmt = $pdo->prepare("UPDATE accessories SET datasheet_url = NULL WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE automotive SET datasheet_url = NULL WHERE id = ?");
             $stmt->execute([$id]);
             $success = 'Datasheet removed.';
         } catch (PDOException $e) {
@@ -309,12 +309,12 @@ if ($isEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['image_acti
                 if (count($uploadedUrls) > 0) {
                     $success = count($uploadedUrls) . ' image(s) uploaded successfully.';
 
-                    $stmt = $pdo->prepare("SELECT image_url FROM accessories WHERE id = ?");
+                    $stmt = $pdo->prepare("SELECT image_url FROM automotive WHERE id = ?");
                     $stmt->execute([$id]);
                     $current = $stmt->fetch(PDO::FETCH_ASSOC);
 
                     if ($current && trim((string)$current['image_url']) === '') {
-                        $stmt = $pdo->prepare("UPDATE accessories SET image_url = ? WHERE id = ?");
+                        $stmt = $pdo->prepare("UPDATE automotive SET image_url = ? WHERE id = ?");
                         $stmt->execute([$uploadedUrls[0], $id]);
                     }
                 } else {
@@ -327,8 +327,8 @@ if ($isEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['image_acti
     }
 }
 
-/* â”€â”€ Save accessory info â”€â”€ */
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_accessory'])) {
+/* â”€â”€ Save automotive info â”€â”€ */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_automotive'])) {
     $activeTab = 'infoTab';
 
     foreach ($formData as $key => $value) {
@@ -383,7 +383,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_accessory'])) {
         try {
             if ($isEdit) {
                 $stmt = $pdo->prepare("
-                    UPDATE accessories SET
+                    UPDATE automotive SET
                         brand            = :brand,
                         model            = :model,
                         name             = :name,
@@ -432,20 +432,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_accessory'])) {
                 /* Upload any newly added gallery images on the same form submit */
                 $uploadedUrls = uploadAccImages($pdo, $id, $error);
                 if ($error === '' && count($uploadedUrls) > 0) {
-                    $stmt = $pdo->prepare("SELECT image_url FROM accessories WHERE id = ?");
+                    $stmt = $pdo->prepare("SELECT image_url FROM automotive WHERE id = ?");
                     $stmt->execute([$id]);
                     $current = $stmt->fetch(PDO::FETCH_ASSOC);
                     if ($current && trim((string)$current['image_url']) === '') {
-                        $stmt = $pdo->prepare("UPDATE accessories SET image_url = ? WHERE id = ?");
+                        $stmt = $pdo->prepare("UPDATE automotive SET image_url = ? WHERE id = ?");
                         $stmt->execute([$uploadedUrls[0], $id]);
                     }
                 }
 
-                $success = 'Accessory updated successfully.';
+                $success = 'Automotive updated successfully.';
 
             } else {
                 $stmt = $pdo->prepare("
-                    INSERT INTO accessories (
+                    INSERT INTO automotive (
                         owner_type, owner_id, brand, model, name,
                         category, manufacture_year, serial_number, lead_time,
                         selling_price, promo_enabled, discount_price, promo_end_date, promo_label,
@@ -488,20 +488,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_accessory'])) {
                 $uploadedUrls = uploadAccImages($pdo, $newId, $error);
 
                 if ($error === '' && count($uploadedUrls) > 0) {
-                    $stmt = $pdo->prepare("UPDATE accessories SET image_url = ? WHERE id = ?");
+                    $stmt = $pdo->prepare("UPDATE automotive SET image_url = ? WHERE id = ?");
                     $stmt->execute([$uploadedUrls[0], $newId]);
                 }
 
                 if ($error === '') {
                     if ($submitAction === 'insert_add') {
-                        header('Location: accessory-form.php?added=1');
+                        header('Location: automotive-form.php?added=1');
                         exit;
                     }
                     if ($submitAction === 'insert_exit') {
-                        header('Location: accessory-list.php?added=1');
+                        header('Location: automotive-list.php?added=1');
                         exit;
                     }
-                    header('Location: accessory-form.php?id=' . $newId . '&added=1');
+                    header('Location: automotive-form.php?id=' . $newId . '&added=1');
                     exit;
                 }
             }
@@ -513,7 +513,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_accessory'])) {
 
 /* â”€â”€ Refresh after actions â”€â”€ */
 if ($isEdit) {
-    $stmt = $pdo->prepare("SELECT * FROM accessories WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM automotive WHERE id = ?");
     $stmt->execute([$id]);
     $product = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -523,7 +523,7 @@ if ($isEdit) {
         }
     }
 
-    $galleryStmt = $pdo->prepare("SELECT * FROM accessory_images WHERE accessory_id = ? ORDER BY sort_order ASC, id ASC");
+    $galleryStmt = $pdo->prepare("SELECT * FROM automotive_images WHERE automotive_id = ? ORDER BY sort_order ASC, id ASC");
     $galleryStmt->execute([$id]);
     $galleryImages = $galleryStmt->fetchAll(PDO::FETCH_ASSOC);
 }
@@ -868,11 +868,11 @@ include 'header.php';
 </style>
 
 <div class="product-page-title">
-    <h1><?php echo $isEdit ? 'Edit Accessory' : '[New] Accessory'; ?></h1>
+    <h1><?php echo $isEdit ? 'Edit Automotive' : '[New] Automotive'; ?></h1>
 </div>
 
 <div class="breadcrumb">
-    <a href="accessory-list.php">Accessory</a> &gt; <span><?php echo $isEdit ? 'Edit Accessory' : 'Add Accessory'; ?></span>
+    <a href="automotive-list.php">Automotive</a> &gt; <span><?php echo $isEdit ? 'Edit Automotive' : 'Add Automotive'; ?></span>
 </div>
 
 <?php if ($success): ?>
@@ -892,11 +892,11 @@ include 'header.php';
 <?php if ($isEdit): ?>
     <div class="form-header">
         <div>
-            <h1>Edit Accessory</h1>
-            <p>Update accessory information and manage images.</p>
+            <h1>Edit Automotive</h1>
+            <p>Update automotive information and manage images.</p>
         </div>
         <div class="form-header-actions">
-            <a href="accessory-list.php" class="btn btn-light">Back to List</a>
+            <a href="automotive-list.php" class="btn btn-light">Back to List</a>
         </div>
     </div>
 <?php endif; ?>
@@ -905,26 +905,26 @@ include 'header.php';
 
     <?php if (!$isEdit): ?>
         <form method="post" enctype="multipart/form-data" id="accForm">
-            <input type="hidden" name="save_accessory" value="1">
+            <input type="hidden" name="save_automotive" value="1">
             <input type="hidden" name="submit_action" id="submitActionInput" value="insert">
 
             <div class="top-actions">
                 <button type="submit" class="action-btn" data-action="insert">Insert</button>
                 <button type="submit" class="action-btn" data-action="insert_add">Insert and Add</button>
                 <button type="submit" class="action-btn" data-action="insert_exit">Insert and Exit</button>
-                <a href="accessory-list.php" class="action-btn action-btn-light">Cancel</a>
+                <a href="automotive-list.php" class="action-btn action-btn-light">Cancel</a>
             </div>
     <?php endif; ?>
 
     <?php if ($isEdit): ?>
         <form method="post" enctype="multipart/form-data" id="accForm">
-            <input type="hidden" name="save_accessory" value="1">
+            <input type="hidden" name="save_automotive" value="1">
             <input type="hidden" name="submit_action" id="submitActionInput" value="update">
     <?php endif; ?>
 
     <div class="product-tabs">
         <button type="button" class="product-tab-btn <?php echo $activeTab === 'infoTab' ? 'active' : ''; ?>" data-tab="infoTab">
-            Accessory Info
+            Automotive Info
         </button>
         <button type="button" class="product-tab-btn <?php echo $activeTab === 'imageTab' ? 'active' : ''; ?>" data-tab="imageTab">
             Images<?php echo $isEdit ? ' (' . (count($galleryImages) + (!empty($formData['image_url']) ? 1 : 0)) . ')' : ''; ?>
@@ -963,7 +963,7 @@ include 'header.php';
                         </option>
                     <?php endforeach; ?>
                 </select>
-                <div class="help">Used to filter accessory by category on the public accessory page.</div>
+                <div class="help">Used to filter automotive by category on the public automotive page.</div>
             </div>
 
             <div class="section-title">Equipment Details</div>
@@ -1101,7 +1101,7 @@ include 'header.php';
             <div class="section-title">Datasheet (PDF)</div>
 
             <div class="form-group full">
-                <label>Accessory Datasheet (PDF, max 5MB)</label>
+                <label>Automotive Datasheet (PDF, max 5MB)</label>
                 <?php if (!empty($formData['datasheet_url'])): ?>
                     <div style="margin-bottom:10px;display:flex;align-items:center;gap:14px;">
                         <a href="<?php echo e('../' . $formData['datasheet_url']); ?>" target="_blank" style="color:#ef3f4d;font-weight:600;">
@@ -1210,8 +1210,8 @@ include 'header.php';
 
     <?php if ($isEdit): ?>
         <div class="bottom-actions">
-            <button type="submit" class="action-btn" name="save_accessory" value="1">Save Changes</button>
-            <a href="accessory-list.php" class="action-btn action-btn-light">Cancel</a>
+            <button type="submit" class="action-btn" name="save_automotive" value="1">Save Changes</button>
+            <a href="automotive-list.php" class="action-btn action-btn-light">Cancel</a>
         </div>
         </form>
     <?php endif; ?>
@@ -1221,7 +1221,7 @@ include 'header.php';
             <button type="submit" class="action-btn" data-action="insert">Insert</button>
             <button type="submit" class="action-btn" data-action="insert_add">Insert and Add</button>
             <button type="submit" class="action-btn" data-action="insert_exit">Insert and Exit</button>
-            <a href="accessory-list.php" class="action-btn action-btn-light">Cancel</a>
+            <a href="automotive-list.php" class="action-btn action-btn-light">Cancel</a>
         </div>
         </form>
     <?php endif; ?>

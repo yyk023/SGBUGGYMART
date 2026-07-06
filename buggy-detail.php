@@ -798,6 +798,20 @@ $filterYearEnd      = $filterYearStart - 15;
         position: relative;
     }
 
+    .gallery-track {
+        display: flex;
+        height: 100%;
+        width: 100%;
+        transition: transform 0.4s ease;
+        will-change: transform;
+    }
+
+    .gallery-slide {
+        flex: 0 0 100%;
+        height: 100%;
+        width: 100%;
+    }
+
     .gallery-main img {
         width: 100%;
         height: 100%;
@@ -1696,12 +1710,32 @@ $filterYearEnd      = $filterYearStart - 15;
                     <button type="button" class="gallery-arrow prev" onclick="changeImage(-1)">‹</button>
                 <?php endif; ?>
 
-                <img 
-                    id="mainBuggyImage" 
-                    src="<?php echo htmlspecialchars($allImages[0]); ?>" 
-                    alt="<?php echo htmlspecialchars($title); ?>"
-                    onerror="this.src='images/no-image.jpg';"
-                >
+                <div class="gallery-track" id="galleryTrack">
+                    <?php if (count($allImages) > 1): /* clone of last image for left-loop */ ?>
+                        <div class="gallery-slide">
+                            <img src="<?php echo htmlspecialchars($allImages[count($allImages) - 1]); ?>"
+                                 alt="<?php echo htmlspecialchars($title); ?>"
+                                 onerror="this.src='images/no-image.jpg';">
+                        </div>
+                    <?php endif; ?>
+
+                    <?php foreach ($allImages as $gIdx => $gImg): ?>
+                        <div class="gallery-slide" data-real-index="<?php echo (int)$gIdx; ?>">
+                            <img <?php echo $gIdx === 0 ? 'id="mainBuggyImage"' : ''; ?>
+                                 src="<?php echo htmlspecialchars($gImg); ?>"
+                                 alt="<?php echo htmlspecialchars($title); ?>"
+                                 onerror="this.src='images/no-image.jpg';">
+                        </div>
+                    <?php endforeach; ?>
+
+                    <?php if (count($allImages) > 1): /* clone of first image for right-loop */ ?>
+                        <div class="gallery-slide">
+                            <img src="<?php echo htmlspecialchars($allImages[0]); ?>"
+                                 alt="<?php echo htmlspecialchars($title); ?>"
+                                 onerror="this.src='images/no-image.jpg';">
+                        </div>
+                    <?php endif; ?>
+                </div>
 
                 <?php if (count($allImages) > 1): ?>
                     <button type="button" class="gallery-arrow next" onclick="changeImage(1)">›</button>
@@ -2309,22 +2343,22 @@ $filterYearEnd      = $filterYearStart - 15;
 
         const maxPage = getMaxThumbPage();
 
-        if (thumbPage < 0) {
+        if (maxPage <= 0) {
             thumbPage = 0;
-        }
-
-        if (thumbPage > maxPage) {
+        } else if (thumbPage < 0) {
             thumbPage = maxPage;
+        } else if (thumbPage > maxPage) {
+            thumbPage = 0;
         }
 
         thumbRow.style.transform = 'translateX(-' + (thumbPage * 100) + '%)';
 
         if (thumbPrevBtn) {
-            thumbPrevBtn.disabled = thumbPage === 0;
+            thumbPrevBtn.disabled = false;
         }
 
         if (thumbNextBtn) {
-            thumbNextBtn.disabled = thumbPage === maxPage;
+            thumbNextBtn.disabled = false;
         }
     }
 
@@ -2335,41 +2369,67 @@ $filterYearEnd      = $filterYearStart - 15;
     }
 
     function updateGallery() {
-        if (!buggyImages.length) {
-            return;
-        }
-
-        mainBuggyImage.src = buggyImages[currentImageIndex];
-
-        thumbs.forEach(function (thumb) {
-            thumb.classList.remove('active');
-        });
-
+        thumbs.forEach(function (thumb) { thumb.classList.remove('active'); });
         const activeThumb = document.querySelector('.thumb[data-index="' + currentImageIndex + '"]');
-
-        if (activeThumb) {
-            activeThumb.classList.add('active');
-        }
-
+        if (activeThumb) activeThumb.classList.add('active');
         moveThumbPageToImage(currentImageIndex);
     }
 
+    /* ===== Carousel (infinite loop) =====
+       The track holds [cloneOfLast, real_0, real_1, ..., real_N-1, cloneOfFirst].
+       After a slide animation lands on a clone, we snap (no animation) to the
+       matching real slide so the next arrow click continues sliding in the
+       same direction. isAnimating prevents rapid clicks from breaking the snap. */
+    const galleryTrack = document.getElementById('galleryTrack');
+    const totalImages  = buggyImages.length;
+    let displayIndex   = totalImages > 1 ? 1 : 0;
+    let isAnimating    = false;
+
+    function applyTrackTransform(animate) {
+        if (!galleryTrack) return;
+        galleryTrack.style.transition = animate ? 'transform 0.4s ease' : 'none';
+        galleryTrack.style.transform  = 'translateX(-' + (displayIndex * 100) + '%)';
+    }
+
+    if (galleryTrack) {
+        applyTrackTransform(false);
+
+        galleryTrack.addEventListener('transitionend', function (e) {
+            if (e.propertyName !== 'transform') return;
+            if (totalImages > 1) {
+                if (displayIndex === 0) {
+                    displayIndex = totalImages;
+                    applyTrackTransform(false);
+                } else if (displayIndex === totalImages + 1) {
+                    displayIndex = 1;
+                    applyTrackTransform(false);
+                }
+            }
+            isAnimating = false;
+        });
+    }
+
     function setImage(index) {
+        if (!totalImages || isAnimating) return;
         currentImageIndex = index;
+        displayIndex      = totalImages > 1 ? index + 1 : 0;
+        isAnimating = true;
+        applyTrackTransform(true);
+        setTimeout(function () { isAnimating = false; }, 500);
         updateGallery();
     }
 
     function changeImage(direction) {
+        if (totalImages <= 1 || isAnimating) return;
         currentImageIndex += direction;
+        displayIndex      += direction;
 
-        if (currentImageIndex < 0) {
-            currentImageIndex = buggyImages.length - 1;
-        }
+        if (currentImageIndex < 0)            currentImageIndex = totalImages - 1;
+        if (currentImageIndex >= totalImages) currentImageIndex = 0;
 
-        if (currentImageIndex >= buggyImages.length) {
-            currentImageIndex = 0;
-        }
-
+        isAnimating = true;
+        applyTrackTransform(true);
+        setTimeout(function () { isAnimating = false; }, 500);
         updateGallery();
     }
 

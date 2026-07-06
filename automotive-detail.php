@@ -8,7 +8,7 @@ require_once 'includes/db.php';
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($id <= 0) {
-    die('Invalid accessory ID.');
+    die('Invalid automotive ID.');
 }
 
 $view = isset($_GET['view']) ? trim($_GET['view']) : 'overview';
@@ -19,7 +19,7 @@ if (!in_array($view, ['overview', 'photos'], true)) {
 try {
     $stmt = $pdo->prepare("
         SELECT *
-        FROM accessories
+        FROM automotive
         WHERE id = :id
         AND status = 'active'
         LIMIT 1
@@ -28,14 +28,14 @@ try {
     $item = $stmt->fetch();
 
     if (!$item) {
-        die('Accessory not found.');
+        die('Automotive not found.');
     }
 } catch (PDOException $e) {
     die('Database error: ' . $e->getMessage());
 }
 
 $title           = !empty($item['name']) ? $item['name'] : trim(($item['brand'] ?? '') . ' ' . ($item['model'] ?? ''));
-if ($title === '') $title = 'Accessory Detail';
+if ($title === '') $title = 'Automotive Detail';
 
 $brand           = $item['brand'] ?? '';
 $model           = $item['model'] ?? '';
@@ -72,7 +72,7 @@ $manufactureYear = $item['manufacture_year'] ?? '';
 
 $sgbuggymartWhatsapp = '65XXXXXXXX';
 $cleanWhatsapp       = preg_replace('/[^0-9]/', '', $sgbuggymartWhatsapp);
-$whatsappMessage     = rawurlencode('Hi SGBUGGYMART, I am interested in this accessory: ' . $title);
+$whatsappMessage     = rawurlencode('Hi SGBUGGYMART, I am interested in this automotive: ' . $title);
 $whatsappLink        = $cleanWhatsapp !== ''
     ? 'https://wa.me/' . $cleanWhatsapp . '?text=' . $whatsappMessage
     : '#';
@@ -83,11 +83,11 @@ $galleryImages = [];
 try {
     $galleryStmt = $pdo->prepare("
         SELECT image_url
-        FROM accessory_images
-        WHERE accessory_id = :accessory_id
+        FROM automotive_images
+        WHERE automotive_id = :automotive_id
         ORDER BY sort_order ASC, id ASC
     ");
-    $galleryStmt->execute([':accessory_id' => $id]);
+    $galleryStmt->execute([':automotive_id' => $id]);
     $galleryImages = $galleryStmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (PDOException $e) {
     $galleryImages = [];
@@ -470,11 +470,11 @@ include 'header.php';
 
     <div class="breadcrumb">
         <a href="index.php">Home</a>
-        <span>›</span>
-        <a href="accessories.php">Accessories</a>
-        <span>›</span>
-        <a href="accessories.php?brand=<?php echo urlencode($brand); ?>"><?php echo htmlspecialchars($brand); ?></a>
-        <span>›</span>
+        <span>â€º</span>
+        <a href="automotive.php">Automotive</a>
+        <span>â€º</span>
+        <a href="automotive.php?brand=<?php echo urlencode($brand); ?>"><?php echo htmlspecialchars($brand); ?></a>
+        <span>â€º</span>
         <strong><?php echo htmlspecialchars($title); ?></strong>
     </div>
 
@@ -485,12 +485,12 @@ include 'header.php';
     </div>
 
     <nav class="detail-tabs">
-        <a href="accessory-detail.php?id=<?php echo (int)$id; ?>" class="<?php echo $view === 'overview' ? 'active' : ''; ?>">Overview</a>
-        <a href="accessory-detail.php?id=<?php echo (int)$id; ?>&view=photos" class="<?php echo $view === 'photos' ? 'active' : ''; ?>">Photos</a>
+        <a href="automotive-detail.php?id=<?php echo (int)$id; ?>" class="<?php echo $view === 'overview' ? 'active' : ''; ?>">Overview</a>
+        <a href="automotive-detail.php?id=<?php echo (int)$id; ?>&view=photos" class="<?php echo $view === 'photos' ? 'active' : ''; ?>">Photos</a>
         <?php if ($view === 'overview'): ?>
             <a href="javascript:void(0)" onclick="return scrollToSection(event, 'specification')">Specification</a>
         <?php else: ?>
-            <a href="accessory-detail.php?id=<?php echo (int)$id; ?>#specification">Specification</a>
+            <a href="automotive-detail.php?id=<?php echo (int)$id; ?>#specification">Specification</a>
         <?php endif; ?>
     </nav>
 
@@ -565,8 +565,8 @@ include 'header.php';
         <aside class="info-panel">
             <?php if ($hasPromo): ?>
                 <div class="promo-banner">
-                    <span class="promo-banner-badge">🔥 <?php echo htmlspecialchars($item['promo_label'] ?: 'LIMITED TIME OFFER'); ?></span>
-                    <span class="promo-banner-countdown">⏰ <?php echo htmlspecialchars(accPromoTimeLeft($item['promo_end_date'])); ?></span>
+                    <span class="promo-banner-badge">&#128293; <?php echo htmlspecialchars($item['promo_label'] ?: 'LIMITED TIME OFFER'); ?></span>
+                    <span class="promo-banner-countdown">&#9200; <?php echo htmlspecialchars(accPromoTimeLeft($item['promo_end_date'])); ?></span>
                 </div>
 
                 <div class="promo-original">
@@ -614,7 +614,7 @@ include 'header.php';
             </div>
 
             <div class="premium-label">
-                <?php echo htmlspecialchars($tag ?: 'Accessory'); ?>
+                <?php echo htmlspecialchars($tag ?: 'Automotive'); ?>
             </div>
 
             <button type="button" class="contact-btn" onclick="openSgContactModal()">
@@ -625,7 +625,7 @@ include 'header.php';
             </a>
 
             <div class="analysis-box">
-                This accessory is available for purchase.
+                This automotive is available for purchase.
                 <a href="javascript:void(0)" onclick="return scrollToSection(event, 'specification')">View Full Details</a>
             </div>
         </aside>
@@ -650,7 +650,7 @@ include 'header.php';
                 <a href="<?php echo htmlspecialchars($item['datasheet_url']); ?>"
                    target="_blank"
                    style="display:inline-flex;align-items:center;gap:8px;background:#ef3f4d;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:700;">
-                    📄 Download Datasheet (PDF)
+                    ðŸ“„ Download Datasheet (PDF)
                 </a>
             </div>
         <?php endif; ?>

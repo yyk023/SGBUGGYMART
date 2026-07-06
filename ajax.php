@@ -12,6 +12,42 @@ if ($action === 'list') {
     $seats        = $_GET['seats'] ?? '';
     $brand        = trim($_GET['brand'] ?? '');
 
+    /* Automotive items live in their own table */
+    if ($listing_type === 'automotive') {
+        $autoSql    = "SELECT id, brand, model, name, selling_price, promo_enabled, discount_price, promo_end_date, promo_label, image_url, tag FROM automotive WHERE status = 'active'";
+        $autoParams = [];
+
+        if ($keyword !== '') {
+            $autoSql .= " AND (brand LIKE :kw1 OR model LIKE :kw2 OR name LIKE :kw3)";
+            $autoParams[':kw1'] = '%' . $keyword . '%';
+            $autoParams[':kw2'] = '%' . $keyword . '%';
+            $autoParams[':kw3'] = '%' . $keyword . '%';
+        }
+
+        if ($brand !== '') {
+            $autoSql .= " AND brand = :brand";
+            $autoParams[':brand'] = $brand;
+        }
+
+        $autoSql .= " ORDER BY created_at DESC LIMIT 20";
+
+        try {
+            $autoStmt = $pdo->prepare($autoSql);
+            $autoStmt->execute($autoParams);
+            $items = $autoStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'Success',
+                'data'    => ['count' => count($items), 'items' => $items]
+            ]);
+            exit;
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to load automotive', 'error' => $e->getMessage()]);
+            exit;
+        }
+    }
+
     /* Accessories are in a separate table */
     if ($listing_type === 'accessory') {
         $accSql    = "SELECT id, brand, model, name, selling_price, promo_enabled, discount_price, promo_end_date, promo_label, image_url, tag FROM accessories WHERE status = 'active'";

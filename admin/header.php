@@ -28,9 +28,15 @@ $accessoryPages = [
     'accessory-form.php',
 ];
 
-$isProductPage   = in_array($currentPage, $productPages, true);
-$isSellerPage    = in_array($currentPage, $sellerPages, true);
-$isAccessoryPage = in_array($currentPage, $accessoryPages, true);
+$automotivePages = [
+    'automotive-list.php',
+    'automotive-form.php',
+];
+
+$isProductPage    = in_array($currentPage, $productPages, true);
+$isSellerPage     = in_array($currentPage, $sellerPages, true);
+$isAccessoryPage  = in_array($currentPage, $accessoryPages, true);
+$isAutomotivePage = in_array($currentPage, $automotivePages, true);
 $bannerPages = ['banner-list.php', 'banner-form.php', 'ad-list.php', 'ad-form.php'];
 
 $isProductListPage = in_array($currentPage, [
@@ -709,6 +715,23 @@ $isProductBrandPage = $currentPage === 'product-brand.php';
                 <div class="submenu">
                     <a href="accessory-list.php" class="<?php echo $currentPage === 'accessory-list.php' ? 'active' : ''; ?>">
                         Accessory List
+                    </a>
+                </div>
+            </div>
+
+            <div class="menu-group <?php echo $isAutomotivePage ? 'open' : ''; ?>">
+                <button type="button" class="menu-parent">
+                    <span class="menu-label">
+                        <span class="menu-icon">🚗</span>
+                        <span>Automotive</span>
+                    </span>
+                    <span class="menu-arrow">▾</span>
+                    <span role="button" class="collapsed-expand-btn" title="Open menu">›</span>
+                </button>
+
+                <div class="submenu">
+                    <a href="automotive-list.php" class="<?php echo $currentPage === 'automotive-list.php' ? 'active' : ''; ?>">
+                        Automotive List
                     </a>
                 </div>
             </div>

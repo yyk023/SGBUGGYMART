@@ -283,6 +283,7 @@ include 'header.php';
     .ubuggy-fl-apply:hover { background: #005bb8; }
     @media (max-width: 620px) {
         .ubuggy-search-bar { flex-direction: column; align-items: stretch; padding: 18px; border-radius: 18px; }
+        .ubuggy-search-input, .ubuggy-filter-btn, .ubuggy-search-btn { height: 54px; font-size: 16px; }
         .ubuggy-filter-btn, .ubuggy-search-btn { width: 100%; justify-content: center; }
     }
     /* ========== END Compact Filter ========== */
@@ -1386,6 +1387,22 @@ include 'header.php';
         const clearBtn = document.getElementById('ubuggyClearFilter');
         const mainForm = document.getElementById('ubuggyMainForm');
         if (!overlay || !openBtn) return;
+
+        // Disable Max options that are <= Min (and reset Max if it becomes invalid)
+        const ubMin = document.getElementById('ubuggyMinPrice');
+        const ubMax = document.getElementById('ubuggyMaxPrice');
+        function updateUbuggyMaxOptions() {
+            if (!ubMin || !ubMax) return;
+            const min = parseInt(ubMin.value, 10) || 0;
+            Array.from(ubMax.options).forEach(opt => {
+                const val = parseInt(opt.value, 10) || 0;
+                opt.disabled = (opt.value !== '' && min > 0 && val <= min);
+            });
+            const curMax = parseInt(ubMax.value, 10) || 0;
+            if (curMax > 0 && curMax <= min) ubMax.value = '';
+        }
+        if (ubMin) ubMin.addEventListener('change', updateUbuggyMaxOptions);
+        updateUbuggyMaxOptions();
 
         openBtn.addEventListener('click', () => { overlay.classList.add('active'); document.body.style.overflow = 'hidden'; });
         closeBtn.addEventListener('click', () => { overlay.classList.remove('active'); document.body.style.overflow = ''; });

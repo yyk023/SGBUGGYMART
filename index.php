@@ -11,6 +11,7 @@ include 'header.php';
     <?php include 'home-buggybrands.php'; ?>
     <?php include 'home-usedbuggy.php'; ?>
     <?php include 'home-accessories.php'; ?>
+    <?php include 'home-automotive.php'; ?>
     <?php include 'home-newbuggy.php'; ?>
 </main>
 

@@ -1067,7 +1067,7 @@ if ($is_seller_logged_in) {
             </div>
 
             <nav class="main-nav">
-                <a href="https://onstore.sgbuggymart.com/" target="_blank">Rent Buggy</a>
+                <a href="https://www.buggyforrent.com/products.php" target="_blank">Rent Buggy</a>
                 <a href="/newbuggy.php" data-condition="new">New Buggy</a>
                 <a href="/usedbuggy.php" data-condition="used">Used Buggy</a>
                 <a href="/accessories.php">Accessories</a>
@@ -1091,7 +1091,7 @@ if ($is_seller_logged_in) {
                 </div>
 
                 <div class="mobile-menu-links">
-                    <a href="https://onstore.sgbuggymart.com/" target="_blank">Rent Buggy</a>
+                    <a href="https://www.buggyforrent.com/products.php" target="_blank">Rent Buggy</a>
                     <a href="/newbuggy.php">New Buggy</a>
                     <a href="/usedbuggy.php">Used Buggy</a>
                     <a href="/accessories.php">Accessories</a>

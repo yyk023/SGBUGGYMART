@@ -10,7 +10,7 @@ function e($value)
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
-function buggyImagePath($imageUrl)
+function accImagePath($imageUrl)
 {
     $imageUrl = trim((string)$imageUrl);
 
@@ -33,7 +33,7 @@ function buggyImagePath($imageUrl)
     return 'images/' . $imageUrl;
 }
 
-function formatPrice($price)
+function accFormatPrice($price)
 {
     $price = (float)$price;
 
@@ -44,26 +44,18 @@ function formatPrice($price)
     return '$' . number_format($price, 0);
 }
 
-/**
- * Check if a buggy has an active promo (enabled, not expired, original price > selling price).
- */
-function isPromoActive($buggy)
+function isPromoActive($item)
 {
-    if (empty($buggy['promo_enabled']) || (int)$buggy['promo_enabled'] !== 1) return false;
-    if (empty($buggy['promo_end_date'])) return false;
-    if (empty($buggy['discount_price']) || (float)$buggy['discount_price'] >= (float)$buggy['selling_price']) return false;
+    if (empty($item['promo_enabled']) || (int)$item['promo_enabled'] !== 1) return false;
+    if (empty($item['promo_end_date'])) return false;
+    if (empty($item['discount_price']) || (float)$item['discount_price'] >= (float)$item['selling_price']) return false;
 
-    return strtotime($buggy['promo_end_date']) > time();
+    return strtotime($item['promo_end_date']) > time();
 }
 
-/**
- * Returns "3 days 12hr left" style countdown string.
- */
 function formatPromoTimeLeft($endDate)
 {
-    $end = strtotime($endDate);
-    $now = time();
-    $diff = $end - $now;
+    $diff = strtotime($endDate) - time();
 
     if ($diff <= 0) return 'Expired';
 
@@ -82,21 +74,6 @@ function formatPromoTimeLeft($endDate)
     return $minutes . ' min left';
 }
 
-function formatSeatsLabel($seats)
-{
-    $seats = trim((string)$seats);
-
-    if ($seats === '') {
-        return 'Seats not specified';
-    }
-
-    if (stripos($seats, 'seater') !== false) {
-        return ucwords($seats);
-    }
-
-    return $seats . ' Seater';
-}
-
 function removeQueryParam($key)
 {
     $query = $_GET;
@@ -108,41 +85,25 @@ function removeQueryParam($key)
     return $queryString ? $path . '?' . $queryString : $path;
 }
 
-$keyword = trim($_GET['keyword'] ?? '');
-$brand = trim($_GET['brand'] ?? '');
-$seats = trim($_GET['seats'] ?? '');
+$keyword  = trim($_GET['keyword']   ?? '');
+$category = trim($_GET['category']  ?? '');
 $minPrice = trim($_GET['min_price'] ?? '');
 $maxPrice = trim($_GET['max_price'] ?? '');
-$year = trim($_GET['year'] ?? '');
-$sort = $_GET['sort'] ?? 'newest';
 
-$orderByMap = [
-    'price_low'  => "(status = 'sold') ASC, selling_price ASC, id DESC",
-    'price_high' => "(status = 'sold') ASC, selling_price DESC, id DESC",
-    'newest'     => "(status = 'sold') ASC, sort_used DESC, created_at DESC, id DESC",
-];
-$orderBy = $orderByMap[$sort] ?? $orderByMap['newest'];
+$priceRangeOptions = [50, 100, 200, 500, 1000, 2000, 5000];
 
-$currentYear = (int)date('Y');
-$startYear = $currentYear;
-$endYear = 2016;
-
-$priceRangeOptions = [
-    5000,
-    8000,
-    10000,
-    12000,
-    15000,
-    18000,
-    20000
+$accCategories = [
+    'batteries'        => 'Batteries',
+    'tyres'            => 'Tyres',
+    'mechanical-parts' => 'Mechanical Parts',
+    'electrical-parts' => 'Electrical Parts',
+    'others'           => 'Others',
 ];
 
-$where = [];
+$where  = [];
 $params = [];
 
-$where[] = "status IN ('active', 'sold')";
-$where[] = "buggy_condition = 'used'";
-$where[] = "listing_type IN ('sale', 'sale_rent')";
+$where[] = "status = 'active'";
 
 if ($keyword !== '') {
     $where[] = "(
@@ -153,22 +114,16 @@ if ($keyword !== '') {
         OR description LIKE :keyword_description
     )";
 
-    $params[':keyword_brand'] = '%' . $keyword . '%';
-    $params[':keyword_model'] = '%' . $keyword . '%';
-    $params[':keyword_name'] = '%' . $keyword . '%';
-    $params[':keyword_short_info'] = '%' . $keyword . '%';
+    $params[':keyword_brand']       = '%' . $keyword . '%';
+    $params[':keyword_model']       = '%' . $keyword . '%';
+    $params[':keyword_name']        = '%' . $keyword . '%';
+    $params[':keyword_short_info']  = '%' . $keyword . '%';
     $params[':keyword_description'] = '%' . $keyword . '%';
 }
 
-if ($brand !== '') {
-    $where[] = "brand = :brand";
-    $params[':brand'] = $brand;
-}
-
-if ($seats !== '') {
-    $where[] = "(seats = :seats OR seats = :seats_label)";
-    $params[':seats'] = $seats;
-    $params[':seats_label'] = $seats . ' seater';
+if ($category !== '' && isset($accCategories[$category])) {
+    $where[] = "category = :category";
+    $params[':category'] = $accCategories[$category];
 }
 
 if ($minPrice !== '') {
@@ -181,19 +136,13 @@ if ($maxPrice !== '') {
     $params[':max_price'] = (float)$maxPrice;
 }
 
-if ($year !== '') {
-    $where[] = "buggy_year = :buggy_year";
-    $params[':buggy_year'] = (int)$year;
-}
-
 $whereSql = implode(' AND ', $where);
 
 /* Pagination */
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 24;
-$offset  = ($page - 1) * $perPage;
 
-$countStmt = $pdo->prepare("SELECT COUNT(*) FROM buggies WHERE $whereSql");
+$countStmt = $pdo->prepare("SELECT COUNT(*) FROM automotive WHERE $whereSql");
 $countStmt->execute($params);
 $totalCount = (int)$countStmt->fetchColumn();
 $totalPages = max(1, (int)ceil($totalCount / $perPage));
@@ -201,14 +150,14 @@ $totalPages = max(1, (int)ceil($totalCount / $perPage));
 if ($page > $totalPages) $page = $totalPages;
 $offset = ($page - 1) * $perPage;
 
-$mainSql = "SELECT * FROM buggies WHERE $whereSql ORDER BY $orderBy LIMIT $perPage OFFSET $offset";
+$mainSql = "SELECT * FROM automotive WHERE $whereSql ORDER BY created_at DESC, id DESC LIMIT $perPage OFFSET $offset";
 $stmt = $pdo->prepare($mainSql);
 $stmt->execute($params);
-$usedBuggies = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$automotive = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $totalResults = $totalCount;
 
-/* Build pagination URL preserving all current filters */
+/* Pagination URL helper */
 function pageUrl($pageNum)
 {
     $params = $_GET;
@@ -216,46 +165,23 @@ function pageUrl($pageNum)
     return '?' . http_build_query($params);
 }
 
-$brandStmt = $pdo->prepare("
-    SELECT DISTINCT brand
-    FROM buggies
-    WHERE status = 'active'
-    AND buggy_condition = 'used'
-    AND listing_type IN ('sale', 'sale_rent')
-    AND brand IS NOT NULL
-    AND brand != ''
-    ORDER BY brand ASC
-");
-$brandStmt->execute();
-$brandList = $brandStmt->fetchAll(PDO::FETCH_COLUMN);
-
-$latestStmt = $pdo->prepare("
-    SELECT *
-    FROM buggies
-    WHERE status = 'active'
-    AND buggy_condition = 'used'
-    AND listing_type IN ('sale', 'sale_rent')
-    ORDER BY sort_used DESC, created_at DESC, id DESC
-    LIMIT 8
-");
+$latestStmt = $pdo->prepare("SELECT * FROM automotive WHERE status = 'active' ORDER BY created_at DESC, id DESC LIMIT 8");
 $latestStmt->execute();
-$latestUsed = $latestStmt->fetchAll(PDO::FETCH_ASSOC);
+$latestItems = $latestStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $hasActiveFilters = (
-    $keyword !== ''
-    || $brand !== ''
-    || $seats !== ''
+    $keyword  !== ''
+    || $category !== ''
     || $minPrice !== ''
     || $maxPrice !== ''
-    || $year !== ''
 );
 
-// Fetch side ads for "side_used_buggy"
+// Fetch side ads for "side_automotive"
 $sideAds = [];
 try {
     $adStmt = $pdo->prepare("
         SELECT * FROM banners
-        WHERE type = 'ad' AND location = 'side_used_buggy' AND status = 'active'
+        WHERE type = 'ad' AND location = 'side_automotive' AND status = 'active'
         ORDER BY sort_order ASC, id ASC LIMIT 5
     ");
     $adStmt->execute();
@@ -272,7 +198,7 @@ include 'header.php';
         background: #ffffff;
     }
 
-    .usedbuggy-page {
+    .acc-page {
         max-width: 1400px;
         margin: 0 auto;
         padding: 26px 18px 60px;
@@ -282,7 +208,7 @@ include 'header.php';
         width: 100%;
         min-height: 86px;
         border-radius: 4px;
-        background: linear-gradient(90deg, #2f3542, #57606f);
+        background: linear-gradient(90deg, #2c2f8c, #4a4fc9);
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -324,224 +250,37 @@ include 'header.php';
         box-shadow: 0 8px 18px rgba(0,0,0,0.15);
     }
 
-    /* ========== Compact Filter Bar + Modal (NEW) ========== */
-    .ubuggy-search-bar {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        margin-bottom: 22px;
-        background: #ffffff;
-        border-radius: 22px;
-        padding: 18px 24px;
-        box-shadow: 0 10px 32px rgba(0, 0, 0, 0.08);
-    }
-
-    .ubuggy-search-input {
-        flex: 1;
-        height: 46px;
-        border: 1px solid #d8dde4;
-        border-radius: 999px;
-        padding: 0 18px;
-        font-size: 15px;
-        color: #333;
-        background: #fff;
-        outline: none;
-        transition: 0.2s ease;
-    }
-    .ubuggy-search-input:focus {
-        border-color: #0066cc;
-        box-shadow: 0 0 0 3px rgba(0,102,204,0.08);
-    }
-
-    .ubuggy-filter-btn {
-        height: 46px;
-        padding: 0 20px;
-        border: 2px solid #1f2937;
-        border-radius: 999px;
-        background: #fff;
-        color: #1f2937;
-        font-size: 14px;
-        font-weight: 700;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        transition: 0.2s ease;
-    }
-    .ubuggy-filter-btn:hover {
-        background: #1f2937;
-        color: #fff;
-    }
-    .ubuggy-filter-count {
-        background: #ef3f4d;
-        color: #fff;
-        border-radius: 999px;
-        padding: 2px 8px;
-        font-size: 11px;
-        font-weight: 800;
-        line-height: 1;
-        margin-left: 4px;
-    }
-
-    .ubuggy-search-btn {
-        height: 46px;
-        padding: 0 28px;
-        border: 0;
-        border-radius: 999px;
-        background: #0066cc;
-        color: #fff;
-        font-size: 14px;
-        font-weight: 900;
-        cursor: pointer;
-        transition: 0.2s ease;
-    }
-    .ubuggy-search-btn:hover {
-        background: #005bb8;
-        transform: translateY(-1px);
-    }
-
-    /* Modal */
-    .ubuggy-filter-overlay {
-        position: fixed; inset: 0;
-        background: rgba(0,0,0,0.55);
-        z-index: 9998;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-    }
+    /* ========== Compact Filter Bar + Modal ========== */
+    .ubuggy-search-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 22px; background: #fff; border-radius: 22px; padding: 18px 24px; box-shadow: 0 10px 32px rgba(0,0,0,0.08); }
+    .ubuggy-search-input { flex: 1; height: 46px; border: 1px solid #d8dde4; border-radius: 999px; padding: 0 18px; font-size: 15px; color: #333; background: #fff; outline: none; transition: 0.2s ease; }
+    .ubuggy-search-input:focus { border-color: #0066cc; box-shadow: 0 0 0 3px rgba(0,102,204,0.08); }
+    .ubuggy-filter-btn { height: 46px; padding: 0 20px; border: 2px solid #1f2937; border-radius: 999px; background: #fff; color: #1f2937; font-size: 14px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: 0.2s ease; }
+    .ubuggy-filter-btn:hover { background: #1f2937; color: #fff; }
+    .ubuggy-filter-count { background: #ef3f4d; color: #fff; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 800; line-height: 1; margin-left: 4px; }
+    .ubuggy-search-btn { height: 46px; padding: 0 28px; border: 0; border-radius: 999px; background: #0066cc; color: #fff; font-size: 14px; font-weight: 900; cursor: pointer; transition: 0.2s ease; }
+    .ubuggy-search-btn:hover { background: #005bb8; transform: translateY(-1px); }
+    .ubuggy-filter-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 9998; display: none; align-items: center; justify-content: center; padding: 20px; }
     .ubuggy-filter-overlay.active { display: flex; }
-    .ubuggy-filter-modal {
-        width: 100%;
-        max-width: 640px;
-        max-height: 90vh;
-        background: #fff;
-        border-radius: 18px;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    }
-    .ubuggy-filter-head {
-        padding: 18px 24px;
-        border-bottom: 1px solid #e5e7eb;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .ubuggy-filter-head h2 {
-        margin: 0;
-        font-size: 20px;
-        font-weight: 800;
-        color: #111827;
-    }
-    .ubuggy-filter-close {
-        width: 36px; height: 36px;
-        border: 0; border-radius: 50%;
-        background: #f3f4f6; color: #555;
-        font-size: 24px; line-height: 1;
-        cursor: pointer;
-    }
+    .ubuggy-filter-modal { width: 100%; max-width: 640px; max-height: 90vh; background: #fff; border-radius: 18px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+    .ubuggy-filter-head { padding: 18px 24px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; }
+    .ubuggy-filter-head h2 { margin: 0; font-size: 20px; font-weight: 800; color: #111827; }
+    .ubuggy-filter-close { width: 36px; height: 36px; border: 0; border-radius: 50%; background: #f3f4f6; color: #555; font-size: 24px; line-height: 1; cursor: pointer; }
     .ubuggy-filter-close:hover { background: #e5e7eb; }
-
-    .ubuggy-filter-body {
-        padding: 22px 24px;
-        overflow-y: auto;
-        flex: 1;
-    }
-
-    .ubuggy-fl-title {
-        margin: 18px 0 10px;
-        font-size: 14px;
-        font-weight: 800;
-        color: #111827;
-    }
+    .ubuggy-filter-body { padding: 22px 24px; overflow-y: auto; flex: 1; }
+    .ubuggy-fl-title { margin: 18px 0 10px; font-size: 14px; font-weight: 800; color: #111827; }
     .ubuggy-fl-title:first-child { margin-top: 0; }
-
-    .ubuggy-fl-range {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    .ubuggy-fl-range select {
-        flex: 1;
-        height: 44px;
-        border: 1px solid #d8dde4;
-        border-radius: 999px;
-        padding: 0 14px;
-        background: #fff;
-        font-size: 14px;
-        outline: none;
-    }
-    .ubuggy-fl-to {
-        color: #6b7280;
-        font-size: 13px;
-        font-weight: 600;
-    }
-
-    .ubuggy-fl-chips {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-    .ubuggy-chip {
-        height: 36px;
-        padding: 0 14px;
-        border: 1px solid #d8dde4;
-        border-radius: 999px;
-        background: #fff;
-        color: #1f2937;
-        font-size: 13px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: 0.2s ease;
-    }
-    .ubuggy-chip:hover {
-        border-color: #0066cc;
-        color: #0066cc;
-    }
-    .ubuggy-chip.active {
-        background: #ef3f4d;
-        border-color: #ef3f4d;
-        color: #fff;
-    }
-
-    .ubuggy-filter-foot {
-        padding: 16px 24px;
-        border-top: 1px solid #e5e7eb;
-        display: flex;
-        gap: 10px;
-        justify-content: space-between;
-    }
-    .ubuggy-fl-clear {
-        height: 44px;
-        padding: 0 22px;
-        border: 1px solid #d8dde4;
-        border-radius: 999px;
-        background: #fff;
-        color: #1f2937;
-        font-weight: 700;
-        cursor: pointer;
-    }
-    .ubuggy-fl-clear:hover {
-        border-color: #ef3f4d;
-        color: #ef3f4d;
-    }
-    .ubuggy-fl-apply {
-        flex: 1;
-        height: 44px;
-        padding: 0 22px;
-        border: 0;
-        border-radius: 999px;
-        background: #0066cc;
-        color: #fff;
-        font-weight: 800;
-        cursor: pointer;
-    }
-    .ubuggy-fl-apply:hover {
-        background: #005bb8;
-    }
-
+    .ubuggy-fl-range { display: flex; align-items: center; gap: 10px; }
+    .ubuggy-fl-range select { flex: 1; height: 44px; border: 1px solid #d8dde4; border-radius: 999px; padding: 0 14px; background: #fff; font-size: 14px; outline: none; }
+    .ubuggy-fl-to { color: #6b7280; font-size: 13px; font-weight: 600; }
+    .ubuggy-fl-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .ubuggy-chip { height: 36px; padding: 0 14px; border: 1px solid #d8dde4; border-radius: 999px; background: #fff; color: #1f2937; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s ease; }
+    .ubuggy-chip:hover { border-color: #0066cc; color: #0066cc; }
+    .ubuggy-chip.active { background: #ef3f4d; border-color: #ef3f4d; color: #fff; }
+    .ubuggy-filter-foot { padding: 16px 24px; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: space-between; }
+    .ubuggy-fl-clear { height: 44px; padding: 0 22px; border: 1px solid #d8dde4; border-radius: 999px; background: #fff; color: #1f2937; font-weight: 700; cursor: pointer; }
+    .ubuggy-fl-clear:hover { border-color: #ef3f4d; color: #ef3f4d; }
+    .ubuggy-fl-apply { flex: 1; height: 44px; padding: 0 22px; border: 0; border-radius: 999px; background: #0066cc; color: #fff; font-weight: 800; cursor: pointer; }
+    .ubuggy-fl-apply:hover { background: #005bb8; }
     @media (max-width: 620px) {
         .ubuggy-search-bar { flex-direction: column; align-items: stretch; padding: 18px; border-radius: 18px; }
         .ubuggy-search-input, .ubuggy-filter-btn, .ubuggy-search-btn { height: 54px; font-size: 16px; }
@@ -549,9 +288,9 @@ include 'header.php';
     }
     /* ========== END Compact Filter ========== */
 
-    .usedbuggy-search-bar {
+    .acc-search-bar {
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: 2fr 2fr 1fr 1fr;
         gap: 12px;
         align-items: center;
         margin-bottom: 22px;
@@ -561,24 +300,8 @@ include 'header.php';
         box-shadow: 0 10px 32px rgba(0, 0, 0, 0.08);
     }
 
-    .usedbuggy-keyword-field {
-        grid-column: span 3;
-    }
-
-    .usedbuggy-price-range-field {
-        grid-column: span 2;
-    }
-
-    .usedbuggy-seat-field,
-    .usedbuggy-brand-field,
-    .usedbuggy-year-field,
-    .usedbuggy-sort-field,
-    .usedbuggy-button-field {
-        grid-column: span 1;
-    }
-
-    .usedbuggy-search-bar input,
-    .usedbuggy-search-bar select {
+    .acc-search-bar input,
+    .acc-search-bar select {
         width: 100%;
         height: 46px;
         border: 1px solid #d8dde4;
@@ -592,17 +315,17 @@ include 'header.php';
         box-sizing: border-box;
     }
 
-    .usedbuggy-search-bar input::placeholder {
+    .acc-search-bar input::placeholder {
         color: #888888;
     }
 
-    .usedbuggy-search-bar input:focus,
-    .usedbuggy-search-bar select:focus {
+    .acc-search-bar input:focus,
+    .acc-search-bar select:focus {
         border-color: #0066cc;
-        box-shadow: 0 0 0 3px rgba(0,102,204,0.08);
+        box-shadow: 0 0 0 3px rgba(59,65,200,0.08);
     }
 
-    .usedbuggy-price-field {
+    .acc-price-field {
         width: 100%;
         height: 46px;
         border: 1px solid #d8dde4;
@@ -615,7 +338,7 @@ include 'header.php';
         box-sizing: border-box;
     }
 
-    .usedbuggy-price-field select {
+    .acc-price-field select {
         width: 100%;
         height: 44px;
         border: 0;
@@ -629,26 +352,20 @@ include 'header.php';
         box-shadow: none;
     }
 
-    .usedbuggy-price-field select:focus {
+    .acc-price-field select:focus {
         border: 0;
         box-shadow: none;
         outline: none;
     }
 
-    .usedbuggy-price-divider {
+    .acc-price-divider {
         width: 1px;
         height: 26px;
         background: #d8dde4;
         display: block;
     }
 
-    .usedbuggy-price-field option:disabled,
-    .price-option-disabled {
-        color: #bbbbbb;
-        background: #f5f5f5;
-    }
-
-    .usedbuggy-search-btn {
+    .acc-search-btn {
         width: 100%;
         height: 46px;
         border: 0;
@@ -661,8 +378,8 @@ include 'header.php';
         transition: 0.25s ease;
     }
 
-    .usedbuggy-search-btn:hover {
-        background: #005bb8;
+    .acc-search-btn:hover {
+        background: #2c31a8;
         transform: translateY(-1px);
     }
 
@@ -724,9 +441,9 @@ include 'header.php';
         min-height: 36px;
         padding: 0 14px;
         border-radius: 999px;
-        background: #eef6ff;
+        background: #eeefff;
         color: #0066cc;
-        border: 1px solid #cfe5ff;
+        border: 1px solid #c7caff;
         font-size: 14px;
         font-weight: 800;
         text-decoration: none;
@@ -777,7 +494,7 @@ include 'header.php';
 
     .explore-tab {
         border: 0;
-        background: #f7f7f8;
+        background: #f0f1ff;
         color: #555;
         padding: 12px 23px;
         border-radius: 999px;
@@ -787,13 +504,13 @@ include 'header.php';
     }
 
     .explore-tab.active {
-        background: #eef6ff;
+        background: #e0e3ff;
         color: #0066cc;
         font-weight: 800;
     }
 
     .explore-tab:hover {
-        background: #eef6ff;
+        background: #e0e3ff;
         color: #0066cc;
     }
 
@@ -805,25 +522,45 @@ include 'header.php';
         display: block;
     }
 
-    .brand-grid,
-    .seat-grid {
+    .category-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(120px, 1fr));
-        gap: 14px 28px;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 14px;
     }
 
-    .brand-link,
-    .seat-link {
-        color: #5c6570;
-        font-size: 15px;
+    .category-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 22px 14px;
+        border: 1px solid #e4e8ee;
+        border-radius: 14px;
+        background: #fafbff;
         text-decoration: none;
+        color: #333333;
+        font-size: 14px;
+        font-weight: 700;
+        text-align: center;
         transition: 0.2s ease;
     }
 
-    .brand-link:hover,
-    .seat-link:hover {
+    .category-item:hover {
+        background: #eef1ff;
+        border-color: #0066cc;
         color: #0066cc;
-        transform: translateX(3px);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0, 102, 204, 0.1);
+    }
+
+    .category-icon {
+        font-size: 30px;
+        line-height: 1;
+    }
+
+    .category-label {
+        line-height: 1.3;
     }
 
     .latest-list {
@@ -894,8 +631,8 @@ include 'header.php';
         border-radius: 4px;
         min-height: 210px;
         background:
-            radial-gradient(circle at 20% 70%, rgba(0,102,204,0.15), transparent 28%),
-            linear-gradient(135deg, #ffffff, #f5f7fb);
+            radial-gradient(circle at 20% 70%, rgba(59,65,200,0.12), transparent 28%),
+            linear-gradient(135deg, #ffffff, #f5f6ff);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -920,7 +657,7 @@ include 'header.php';
 
     .small-promo-box {
         border-radius: 7px;
-        background: #f7f7f8;
+        background: #f0f1ff;
         padding: 15px;
         display: flex;
         gap: 14px;
@@ -931,7 +668,7 @@ include 'header.php';
         width: 62px;
         height: 46px;
         border-radius: 12px;
-        background: #eeeeee;
+        background: #e0e3ff;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -969,7 +706,7 @@ include 'header.php';
     }
 
     .view-all-link:hover {
-        color: #005bb8;
+        color: #2c31a8;
     }
 
     .product-grid {
@@ -978,7 +715,7 @@ include 'header.php';
         gap: 18px;
     }
 
-    .buggy-card {
+    .acc-card {
         border: 1px solid #eeeeee;
         border-radius: 10px;
         background: #ffffff;
@@ -989,13 +726,13 @@ include 'header.php';
         display: block;
     }
 
-    .buggy-card:hover {
+    .acc-card:hover {
         transform: translateY(-4px);
-        box-shadow: 0 12px 28px rgba(0,0,0,0.1);
+        box-shadow: 0 12px 28px rgba(59,65,200,0.12);
         border-color: #0066cc;
     }
 
-    .buggy-card-image {
+    .acc-card-image {
         width: 100%;
         height: 160px;
         background: #f3f3f3;
@@ -1003,7 +740,7 @@ include 'header.php';
         overflow: hidden;
     }
 
-    .buggy-card-image img {
+    .acc-card-image img {
         width: 100%;
         height: 100%;
         object-fit: cover;
@@ -1011,7 +748,7 @@ include 'header.php';
         transition: 0.3s ease;
     }
 
-    .buggy-card:hover .buggy-card-image img {
+    .acc-card:hover .acc-card-image img {
         transform: scale(1.05);
     }
 
@@ -1027,11 +764,11 @@ include 'header.php';
         font-weight: 800;
     }
 
-    .buggy-card-body {
+    .acc-card-body {
         padding: 14px;
     }
 
-    .buggy-card-title {
+    .acc-card-title {
         font-size: 15px;
         font-weight: 800;
         margin: 0 0 7px;
@@ -1040,20 +777,20 @@ include 'header.php';
         min-height: 40px;
     }
 
-    .buggy-card-meta {
+    .acc-card-meta {
         font-size: 13px;
         color: #6a7280;
         margin-bottom: 10px;
     }
 
-    .buggy-card-price {
+    .acc-card-price {
         font-size: 17px;
         color: #0066cc;
         font-weight: 900;
         margin-bottom: 4px;
     }
 
-    .buggy-card.has-promo {
+    .acc-card.has-promo {
         border-color: #f97316;
         box-shadow: 0 4px 14px rgba(249, 115, 22, 0.18);
     }
@@ -1080,7 +817,7 @@ include 'header.php';
         50% { transform: scale(1.06); }
     }
 
-    .buggy-card-original-price {
+    .acc-card-original-price {
         color: #6b7280;
         font-size: 22px;
         font-weight: 700;
@@ -1088,26 +825,26 @@ include 'header.php';
         line-height: 1.1;
     }
 
-    .buggy-card-original-price s {
+    .acc-card-original-price s {
         text-decoration: line-through;
         text-decoration-color: #ef4444;
         text-decoration-thickness: 2px;
     }
 
-    .buggy-card-price.promo {
+    .acc-card-price.promo {
         color: #ef4444;
         font-size: 15px;
         font-weight: 700;
     }
 
-    .buggy-card-price.promo::before {
+    .acc-card-price.promo::before {
         content: 'Now: ';
         color: #6b7280;
         font-size: 12px;
         font-weight: 600;
     }
 
-    .buggy-card-countdown {
+    .acc-card-countdown {
         display: inline-block;
         margin-top: 6px;
         background: #fff7ed;
@@ -1119,36 +856,9 @@ include 'header.php';
         border: 1px solid #fed7aa;
     }
 
-    .buggy-card-note {
+    .acc-card-note {
         font-size: 13px;
         color: #333;
-    }
-
-    .card-sold-badge {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        background: #222222;
-        color: #ffffff;
-        font-size: 11px;
-        font-weight: 800;
-        padding: 4px 10px;
-        border-radius: 50px;
-        z-index: 3;
-        letter-spacing: 0.5px;
-    }
-
-    .buggy-card.is-sold .buggy-card-image::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.28);
-        z-index: 2;
-    }
-
-    .buggy-card.is-sold .buggy-card-note {
-        color: #ef3f4d;
-        font-weight: 700;
     }
 
     .empty-box {
@@ -1208,27 +918,11 @@ include 'header.php';
         font-weight: 700;
     }
 
-    @media (max-width: 1080px) {
-        .usedbuggy-search-bar {
+    @media (max-width: 980px) {
+        .acc-search-bar {
             grid-template-columns: 1fr 1fr;
         }
 
-        .usedbuggy-keyword-field,
-        .usedbuggy-price-range-field,
-        .usedbuggy-seat-field,
-        .usedbuggy-brand-field,
-        .usedbuggy-year-field,
-        .usedbuggy-sort-field,
-        .usedbuggy-button-field {
-            grid-column: 1 / -1;
-        }
-
-        .usedbuggy-search-btn {
-            width: 100%;
-        }
-    }
-
-    @media (max-width: 980px) {
         .explore-layout {
             grid-template-columns: 1fr;
         }
@@ -1237,9 +931,8 @@ include 'header.php';
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        .brand-grid,
-        .seat-grid {
-            grid-template-columns: repeat(3, minmax(100px, 1fr));
+        .category-grid {
+            grid-template-columns: repeat(3, 1fr);
         }
     }
 
@@ -1254,7 +947,7 @@ include 'header.php';
     }
 
     @media (max-width: 620px) {
-        .usedbuggy-page {
+        .acc-page {
             padding: 18px 14px 45px;
         }
 
@@ -1268,53 +961,45 @@ include 'header.php';
             margin-top: 14px;
         }
 
-        .usedbuggy-search-bar {
+        .acc-search-bar {
             grid-template-columns: 1fr;
             padding: 22px 18px;
             border-radius: 18px;
         }
 
-        .brand-grid,
-        .seat-grid,
+        .category-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
         .latest-list,
         .product-grid {
             grid-template-columns: 1fr;
         }
 
-        .buggy-card-image {
+        .acc-card-image {
             height: 210px;
         }
     }
 </style>
 
-<div class="usedbuggy-page">
+<div class="acc-page">
 
     <section class="top-promo-banner">
         <div class="top-promo-content">
-            <h2>Explore Quality Used Buggies at SGBUGGYMART</h2>
-            <p>Find quality used buggies for sale, events, resorts, golf clubs and private use.</p>
+            <h2>Buggy Automotive at SGBUGGYMART</h2>
+            <p>Seat covers, chargers, parts, lights and more &mdash; everything for your buggy.</p>
         </div>
 
-        <a href="usedbuggy.php" class="top-promo-btn">VIEW USED BUGGY</a>
+        <a href="automotive.php" class="top-promo-btn">VIEW AUTOMOTIVE</a>
     </section>
 
     <!-- Compact one-line filter bar -->
-    <form class="ubuggy-search-bar" method="get" action="usedbuggy.php" id="ubuggyMainForm">
-        <input
-            type="text"
-            class="ubuggy-search-input"
-            name="keyword"
-            placeholder="Search buggy: brand, model..."
-            value="<?php echo e($keyword); ?>"
-        >
+    <form class="ubuggy-search-bar" method="get" action="automotive.php" id="ubuggyMainForm">
+        <input type="text" class="ubuggy-search-input" name="keyword" placeholder="Search automotive..." value="<?php echo e($keyword); ?>">
 
-        <!-- Hidden mirrored inputs (synced from modal) -->
         <input type="hidden" name="min_price" id="ubuggyMinPriceHidden" value="<?php echo e($minPrice); ?>">
         <input type="hidden" name="max_price" id="ubuggyMaxPriceHidden" value="<?php echo e($maxPrice); ?>">
-        <input type="hidden" name="seats"     id="ubuggySeatsHidden"    value="<?php echo e($seats); ?>">
-        <input type="hidden" name="brand"     id="ubuggyBrandHidden"    value="<?php echo e($brand); ?>">
-        <input type="hidden" name="year"      id="ubuggyYearHidden"     value="<?php echo e($year); ?>">
-        <input type="hidden" name="sort"      id="ubuggySortHidden"     value="<?php echo e($sort); ?>">
+        <input type="hidden" name="category"  id="ubuggyCategoryHidden" value="<?php echo e($category); ?>">
 
         <button type="button" class="ubuggy-filter-btn" id="ubuggyOpenFilter">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
@@ -1325,72 +1010,39 @@ include 'header.php';
         <button type="submit" class="ubuggy-search-btn">Search</button>
     </form>
 
-    <!-- ===================== FILTER MODAL ===================== -->
+    <!-- FILTER MODAL -->
     <div class="ubuggy-filter-overlay" id="ubuggyFilterOverlay">
         <div class="ubuggy-filter-modal">
             <div class="ubuggy-filter-head">
-                <h2>Buggy Filters</h2>
-                <button type="button" class="ubuggy-filter-close" id="ubuggyCloseFilter" aria-label="Close">&times;</button>
+                <h2>Automotive Filters</h2>
+                <button type="button" class="ubuggy-filter-close" id="ubuggyCloseFilter">&times;</button>
             </div>
 
             <div class="ubuggy-filter-body">
-
-                <h3 class="ubuggy-fl-title">💰 Price Range</h3>
+                <h3 class="ubuggy-fl-title">&#128176; Price Range</h3>
                 <div class="ubuggy-fl-range">
                     <select id="ubuggyMinPrice">
                         <option value="">Min Price</option>
                         <?php foreach ($priceRangeOptions as $price): ?>
-                            <option value="<?php echo (int)$price; ?>" <?php echo $minPrice === (string)$price ? 'selected' : ''; ?>>
-                                $<?php echo number_format((int)$price); ?>
-                            </option>
+                            <option value="<?php echo (int)$price; ?>" <?php echo $minPrice === (string)$price ? 'selected' : ''; ?>>$<?php echo number_format((int)$price); ?></option>
                         <?php endforeach; ?>
                     </select>
                     <span class="ubuggy-fl-to">to</span>
                     <select id="ubuggyMaxPrice">
                         <option value="">Max Price</option>
                         <?php foreach ($priceRangeOptions as $price): ?>
-                            <option value="<?php echo (int)$price; ?>" <?php echo $maxPrice === (string)$price ? 'selected' : ''; ?>>
-                                $<?php echo number_format((int)$price); ?>
-                            </option>
+                            <option value="<?php echo (int)$price; ?>" <?php echo $maxPrice === (string)$price ? 'selected' : ''; ?>>$<?php echo number_format((int)$price); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
 
-                <h3 class="ubuggy-fl-title">📅 Year</h3>
-                <div class="ubuggy-fl-chips" data-target="year-chip">
-                    <button type="button" class="ubuggy-chip <?php echo $year === '' ? 'active' : ''; ?>" data-value="">All Years</button>
-                    <?php for ($yearOption = $startYear; $yearOption >= $endYear; $yearOption--): ?>
-                        <button type="button" class="ubuggy-chip <?php echo $year === (string)$yearOption ? 'active' : ''; ?>" data-value="<?php echo (int)$yearOption; ?>">
-                            <?php echo (int)$yearOption; ?>
-                        </button>
-                    <?php endfor; ?>
-                </div>
-
-                <h3 class="ubuggy-fl-title">🚗 Seats</h3>
-                <div class="ubuggy-fl-chips" data-target="seats-chip">
-                    <button type="button" class="ubuggy-chip <?php echo $seats === '' ? 'active' : ''; ?>" data-value="">All Seats</button>
-                    <?php foreach (['2','3','4','6','8'] as $s): ?>
-                        <button type="button" class="ubuggy-chip <?php echo $seats === $s ? 'active' : ''; ?>" data-value="<?php echo $s; ?>"><?php echo $s; ?> Seater</button>
+                <h3 class="ubuggy-fl-title">&#127991;&#65039; Category</h3>
+                <div class="ubuggy-fl-chips" data-target="category-chip">
+                    <button type="button" class="ubuggy-chip <?php echo $category === '' ? 'active' : ''; ?>" data-value="">All Categories</button>
+                    <?php foreach ($accCategories as $catKey => $catLabel): ?>
+                        <button type="button" class="ubuggy-chip <?php echo $category === $catKey ? 'active' : ''; ?>" data-value="<?php echo e($catKey); ?>"><?php echo e($catLabel); ?></button>
                     <?php endforeach; ?>
                 </div>
-
-                <?php if (count($brandList) > 0): ?>
-                    <h3 class="ubuggy-fl-title">🏷️ Brand</h3>
-                    <div class="ubuggy-fl-chips" data-target="brand-chip">
-                        <button type="button" class="ubuggy-chip <?php echo $brand === '' ? 'active' : ''; ?>" data-value="">All Brands</button>
-                        <?php foreach ($brandList as $brandName): ?>
-                            <button type="button" class="ubuggy-chip <?php echo $brand === $brandName ? 'active' : ''; ?>" data-value="<?php echo e($brandName); ?>"><?php echo e($brandName); ?></button>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-
-                <h3 class="ubuggy-fl-title">↕️ Sort By</h3>
-                <div class="ubuggy-fl-chips" data-target="sort-chip">
-                    <button type="button" class="ubuggy-chip <?php echo $sort === 'newest' ? 'active' : ''; ?>" data-value="newest">Newest</button>
-                    <button type="button" class="ubuggy-chip <?php echo $sort === 'price_low' ? 'active' : ''; ?>" data-value="price_low">Price: Low to High</button>
-                    <button type="button" class="ubuggy-chip <?php echo $sort === 'price_high' ? 'active' : ''; ?>" data-value="price_high">Price: High to Low</button>
-                </div>
-
             </div>
 
             <div class="ubuggy-filter-foot">
@@ -1399,60 +1051,47 @@ include 'header.php';
             </div>
         </div>
     </div>
-    <!-- =================== END FILTER MODAL =================== -->
 
     <div class="result-header">
         <div>
-            <h1><?php echo (int)$totalResults; ?> Used Buggies Found</h1>
+            <h1><?php echo (int)$totalResults; ?> Automotive Found</h1>
             <p>
                 <?php if ($hasActiveFilters): ?>
-                    Showing used buggy results based on your selected search filters.
+                    Showing automotive based on your selected filters.
                 <?php else: ?>
-                    Showing all available active used buggy listings for sale.
+                    Showing all available automotive listings.
                 <?php endif; ?>
             </p>
         </div>
 
         <?php if ($hasActiveFilters): ?>
-            <a href="usedbuggy.php" class="clear-search-link">Clear All Filters</a>
+            <a href="automotive.php" class="clear-search-link">Clear All Filters</a>
         <?php endif; ?>
     </div>
 
-       <?php if ($hasActiveFilters): ?>
+    <?php if ($hasActiveFilters): ?>
         <div class="active-search-tags">
             <?php if ($keyword !== ''): ?>
                 <a class="search-tag" href="<?php echo e(removeQueryParam('keyword')); ?>">
                     Keyword: <?php echo e($keyword); ?> &times;
                 </a>
             <?php endif; ?>
-    
-            <?php if ($brand !== ''): ?>
-                <a class="search-tag" href="<?php echo e(removeQueryParam('brand')); ?>">
-                    Brand: <?php echo e($brand); ?> &times;
+
+            <?php if ($category !== '' && isset($accCategories[$category])): ?>
+                <a class="search-tag" href="<?php echo e(removeQueryParam('category')); ?>">
+                    <?php echo e($accCategories[$category]); ?> &times;
                 </a>
             <?php endif; ?>
-    
-            <?php if ($seats !== ''): ?>
-                <a class="search-tag" href="<?php echo e(removeQueryParam('seats')); ?>">
-                    <?php echo e($seats); ?> Seater &times;
-                </a>
-            <?php endif; ?>
-    
+
             <?php if ($minPrice !== ''): ?>
                 <a class="search-tag" href="<?php echo e(removeQueryParam('min_price')); ?>">
-                    Min Price: $<?php echo number_format((float)$minPrice, 0); ?> &times;
+                    Min: $<?php echo number_format((float)$minPrice, 0); ?> &times;
                 </a>
             <?php endif; ?>
-    
+
             <?php if ($maxPrice !== ''): ?>
                 <a class="search-tag" href="<?php echo e(removeQueryParam('max_price')); ?>">
-                    Max Price: $<?php echo number_format((float)$maxPrice, 0); ?> &times;
-                </a>
-            <?php endif; ?>
-    
-            <?php if ($year !== ''): ?>
-                <a class="search-tag" href="<?php echo e(removeQueryParam('year')); ?>">
-                    Year: <?php echo e($year); ?> &times;
+                    Max: $<?php echo number_format((float)$maxPrice, 0); ?> &times;
                 </a>
             <?php endif; ?>
         </div>
@@ -1460,80 +1099,67 @@ include 'header.php';
 
     <section class="explore-section">
         <div class="section-title">
-            <h2>Explore Used Buggy</h2>
+            <h2>Browse Automotive</h2>
         </div>
 
         <div class="explore-layout">
             <div class="explore-main">
                 <div class="explore-tabs">
-                    <button type="button" class="explore-tab active" data-tab="brand">Buggy Brand</button>
-                    <button type="button" class="explore-tab" data-tab="seats">Seats Type</button>
-                    <button type="button" class="explore-tab" data-tab="latest">Latest Used</button>
+                    <button type="button" class="explore-tab active" data-tab="categories">Categories</button>
+                    <button type="button" class="explore-tab" data-tab="latest">Latest Added</button>
                 </div>
 
-                <div class="tab-panel active" id="tab-brand">
-                    <?php if (count($brandList) > 0): ?>
-                        <div class="brand-grid">
-                            <?php foreach ($brandList as $brandName): ?>
-                                <a class="brand-link" href="usedbuggy.php?brand=<?php echo urlencode($brandName); ?>">
-                                    <?php echo e($brandName); ?>
-                                </a>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="brand-grid">
-                            <a class="brand-link" href="usedbuggy.php?brand=Club+Car">Club Car</a>
-                            <a class="brand-link" href="usedbuggy.php?brand=Yamaha">Yamaha</a>
-                            <a class="brand-link" href="usedbuggy.php?brand=EZGO">EZGO</a>
-                            <a class="brand-link" href="usedbuggy.php?brand=HDK">HDK</a>
-                            <a class="brand-link" href="usedbuggy.php?brand=Marshell">Marshell</a>
-                            <a class="brand-link" href="usedbuggy.php?brand=RoyPow">RoyPow</a>
-                            <a class="brand-link" href="usedbuggy.php?brand=Others">Others</a>
-                        </div>
-                    <?php endif; ?>
-                </div>
-
-                <div class="tab-panel" id="tab-seats">
-                    <div class="seat-grid">
-                        <a class="seat-link" href="usedbuggy.php?seats=2">2 Seater</a>
-                        <a class="seat-link" href="usedbuggy.php?seats=3">3 Seater</a>
-                        <a class="seat-link" href="usedbuggy.php?seats=4">4 Seater</a>
-                        <a class="seat-link" href="usedbuggy.php?seats=6">6 Seater</a>
-                        <a class="seat-link" href="usedbuggy.php?seats=8">8 Seater</a>
-                        <a class="seat-link" href="usedbuggy.php?seats=2">Private Use Buggy</a>
-                        <a class="seat-link" href="usedbuggy.php?seats=4">Resort Buggy</a>
-                        <a class="seat-link" href="usedbuggy.php?seats=6">Commercial Use Buggy</a>
+                <div class="tab-panel active" id="tab-categories">
+                    <div class="category-grid">
+                        <a class="category-item" href="automotive.php?category=batteries">
+                            <span class="category-icon">&#128267;</span>
+                            <span class="category-label">Batteries</span>
+                        </a>
+                        <a class="category-item" href="automotive.php?category=tyres">
+                            <span class="category-icon">&#128734;</span>
+                            <span class="category-label">Tyres</span>
+                        </a>
+                        <a class="category-item" href="automotive.php?category=mechanical-parts">
+                            <span class="category-icon">&#9881;&#65039;</span>
+                            <span class="category-label">Mechanical Parts</span>
+                        </a>
+                        <a class="category-item" href="automotive.php?category=electrical-parts">
+                            <span class="category-icon">&#9889;</span>
+                            <span class="category-label">Electrical Parts</span>
+                        </a>
+                        <a class="category-item" href="automotive.php?category=others">
+                            <span class="category-icon">&#128230;</span>
+                            <span class="category-label">Others</span>
+                        </a>
                     </div>
                 </div>
 
                 <div class="tab-panel" id="tab-latest">
-                    <?php if (count($latestUsed) > 0): ?>
+                    <?php if (count($latestItems) > 0): ?>
                         <div class="latest-list">
-                            <?php foreach ($latestUsed as $latest): ?>
-                                <a href="buggy-detail.php?id=<?php echo (int)$latest['id']; ?>" class="latest-item">
+                            <?php foreach ($latestItems as $latest): ?>
+                                <a href="automotive-detail.php?id=<?php echo (int)$latest['id']; ?>" class="latest-item">
                                     <img
-                                        src="<?php echo e(buggyImagePath($latest['image_url'] ?? '')); ?>"
-                                        alt="<?php echo e($latest['name'] ?? 'Used Buggy'); ?>"
+                                        src="<?php echo e(accImagePath($latest['image_url'] ?? '')); ?>"
+                                        alt="<?php echo e($latest['name'] ?? 'Automotive'); ?>"
                                         onerror="this.src='images/no-image.png';"
                                     >
                                     <div>
                                         <strong><?php echo e($latest['name'] ?: ($latest['brand'] . ' ' . $latest['model'])); ?></strong>
-                                        <span><?php echo e(formatPrice($latest['selling_price'] ?? 0)); ?></span>
+                                        <span><?php echo e(accFormatPrice($latest['selling_price'] ?? 0)); ?></span>
                                     </div>
                                 </a>
                             <?php endforeach; ?>
                         </div>
                     <?php else: ?>
-                        <div class="empty-box">
-                            No latest used buggy yet.
-                        </div>
+                        <div class="empty-box">No automotive added yet.</div>
                     <?php endif; ?>
                 </div>
             </div>
 
             <aside class="side-promo">
                 <?php if (count($sideAds) > 0): ?>
-                    <div class="side-ad-slider" id="usedSideAdSlider">
+                    <div class="side-ad-slider" id="accSideAdSlider">
                         <div class="side-ad-slides">
                             <?php foreach ($sideAds as $idx => $ad):
                                 $adImg = $ad['image_url'];
@@ -1572,16 +1198,16 @@ include 'header.php';
                 <?php else: ?>
                     <div class="side-promo-box">
                         <div>
-                            <h3>SGBUGGYMART<br>Used Buggy</h3>
-                            <p>QUALITY PRE-OWNED BUGGY</p>
+                            <h3>SGBUGGYMART<br>Automotive</h3>
+                            <p>PARTS &amp; ADD-ONS FOR YOUR BUGGY</p>
                         </div>
                     </div>
 
                     <div class="small-promo-box">
-                        <div class="small-promo-icon">GO</div>
+                        <div class="small-promo-icon">&#128295;</div>
                         <div>
-                            <strong>Find affordable used buggy</strong>
-                            <span>For events, resort, factory, golf club and private use.</span>
+                            <strong>Wide range of automotive</strong>
+                            <span>Covers, chargers, lights, tyres and more.</span>
                         </div>
                     </div>
                 <?php endif; ?>
@@ -1589,74 +1215,64 @@ include 'header.php';
         </div>
     </section>
 
-    <section class="usedbuggy-promo-section">
+    <section class="acc-listing-section">
         <div class="promo-heading-row">
             <div class="section-title">
-                <h2>Used Buggy Promo</h2>
+                <h2>All Automotive</h2>
             </div>
 
-            <a href="usedbuggy.php" class="view-all-link">View All</a>
+            <a href="automotive.php" class="view-all-link">View All</a>
         </div>
 
-        <?php if (count($usedBuggies) > 0): ?>
+        <?php if (count($automotive) > 0): ?>
             <div class="product-grid">
-                <?php foreach ($usedBuggies as $buggy):
-                    $isSold   = ($buggy['status'] ?? '') === 'sold';
-                    $hasPromo = !$isSold && isPromoActive($buggy);
+                <?php foreach ($automotive as $item):
+                    $hasPromo = isPromoActive($item);
                 ?>
-                    <a href="buggy-detail.php?id=<?php echo (int)$buggy['id']; ?>" class="buggy-card <?php echo $hasPromo ? 'has-promo' : ''; ?> <?php echo $isSold ? 'is-sold' : ''; ?>">
-                        <div class="buggy-card-image">
+                     <a href="automotive-detail.php?id=<?php echo (int)$item['id']; ?>" class="acc-card <?php echo $hasPromo ? 'has-promo' : ''; ?>">
+                        <div class="acc-card-image">
                             <img
-                                src="<?php echo e(buggyImagePath($buggy['image_url'] ?? '')); ?>"
-                                alt="<?php echo e($buggy['name'] ?? 'Used Buggy'); ?>"
+                                src="<?php echo e(accImagePath($item['image_url'] ?? '')); ?>"
+                                alt="<?php echo e($item['name'] ?? 'Automotive'); ?>"
                                 onerror="this.src='images/no-image.png';"
                             >
 
-                            <?php if ($isSold): ?>
-                                <span class="card-sold-badge">SOLD</span>
-                            <?php elseif ($hasPromo): ?>
-                                <span class="promo-badge">🔥 <?php echo e($buggy['promo_label'] ?: 'PROMO'); ?></span>
+                            <?php if ($hasPromo): ?>
+                                <span class="promo-badge">&#128293; <?php echo e($item['promo_label'] ?: 'PROMO'); ?></span>
                             <?php endif; ?>
 
                             <span class="card-tag">
-                                <?php echo e($buggy['tag'] ?: 'Used'); ?>
+                                <?php echo e($item['tag'] ?: 'Automotive'); ?>
                             </span>
                         </div>
 
-                        <div class="buggy-card-body">
-                            <h3 class="buggy-card-title">
-                                <?php echo e($buggy['name'] ?: ($buggy['brand'] . ' ' . $buggy['model'])); ?>
+                        <div class="acc-card-body">
+                            <h3 class="acc-card-title">
+                                <?php echo e($item['name'] ?: ($item['brand'] . ' ' . $item['model'])); ?>
                             </h3>
 
-                            <div class="buggy-card-meta">
-                                <?php echo e(formatSeatsLabel($buggy['seats'] ?? '')); ?> - For Sale
-                                <?php if (!empty($buggy['buggy_year'])): ?>
-                                    - <?php echo e($buggy['buggy_year']); ?>
+                            <div class="acc-card-meta">
+                                <?php echo e($item['brand'] ?: 'Automotive'); ?>
+                                <?php if (!empty($item['short_info'])): ?>
+                                    &mdash; <?php echo e($item['short_info']); ?>
                                 <?php endif; ?>
                             </div>
 
-                            <?php if ($isSold): ?>
-                                <div class="buggy-card-price">
-                                    <?php echo e(formatPrice($buggy['selling_price'] ?? 0)); ?>
+                            <?php if ($hasPromo): ?>
+                                <div class="acc-card-original-price">
+                                    <s>$<?php echo number_format((float)$item['selling_price'], 0); ?></s>
                                 </div>
-                                <div class="buggy-card-note">
-                                    This buggy has been sold
+                                <div class="acc-card-price promo">
+                                    <?php echo e(accFormatPrice($item['discount_price'] ?? 0)); ?>
                                 </div>
-                            <?php elseif ($hasPromo): ?>
-                                <div class="buggy-card-original-price">
-                                    <s>$<?php echo number_format((float)$buggy['selling_price'], 0); ?></s>
-                                </div>
-                                <div class="buggy-card-price promo">
-                                    <?php echo e(formatPrice($buggy['discount_price'] ?? 0)); ?>
-                                </div>
-                                <div class="buggy-card-countdown">
-                                    ⏰ <?php echo e(formatPromoTimeLeft($buggy['promo_end_date'])); ?>
+                                <div class="acc-card-countdown">
+                                    &#9200; <?php echo e(formatPromoTimeLeft($item['promo_end_date'])); ?>
                                 </div>
                             <?php else: ?>
-                                <div class="buggy-card-price">
-                                    <?php echo e(formatPrice($buggy['selling_price'] ?? 0)); ?>
+                                <div class="acc-card-price">
+                                    <?php echo e(accFormatPrice($item['selling_price'] ?? 0)); ?>
                                 </div>
-                                <div class="buggy-card-note">
+                                <div class="acc-card-note">
                                     Contact us for availability
                                 </div>
                             <?php endif; ?>
@@ -1679,7 +1295,7 @@ include 'header.php';
                     if ($windowStart > 1): ?>
                         <a href="<?php echo e(pageUrl(1)); ?>" class="page-link">1</a>
                         <?php if ($windowStart > 2): ?>
-                            <span class="page-ellipsis">…</span>
+                            <span class="page-ellipsis">&hellip;</span>
                         <?php endif; ?>
                     <?php endif; ?>
 
@@ -1693,7 +1309,7 @@ include 'header.php';
 
                     <?php if ($windowEnd < $totalPages): ?>
                         <?php if ($windowEnd < $totalPages - 1): ?>
-                            <span class="page-ellipsis">…</span>
+                            <span class="page-ellipsis">&hellip;</span>
                         <?php endif; ?>
                         <a href="<?php echo e(pageUrl($totalPages)); ?>" class="page-link"><?php echo (int)$totalPages; ?></a>
                     <?php endif; ?>
@@ -1707,7 +1323,7 @@ include 'header.php';
             <?php endif; ?>
         <?php else: ?>
             <div class="empty-box">
-                No used buggy found. Try another search filter.
+                No automotive found. Try another search filter.
             </div>
         <?php endif; ?>
     </section>
@@ -1716,64 +1332,51 @@ include 'header.php';
 
 <script>
     const exploreTabs = document.querySelectorAll('.explore-tab');
-    const tabPanels = document.querySelectorAll('.tab-panel');
+    const tabPanels   = document.querySelectorAll('.tab-panel');
 
     exploreTabs.forEach(function (tab) {
         tab.addEventListener('click', function () {
             const target = this.dataset.tab;
 
-            exploreTabs.forEach(function (item) {
-                item.classList.remove('active');
-            });
-
-            tabPanels.forEach(function (panel) {
-                panel.classList.remove('active');
-            });
+            exploreTabs.forEach(function (item) { item.classList.remove('active'); });
+            tabPanels.forEach(function (panel)  { panel.classList.remove('active'); });
 
             this.classList.add('active');
 
             const activePanel = document.getElementById('tab-' + target);
-            if (activePanel) {
-                activePanel.classList.add('active');
-            }
+            if (activePanel) activePanel.classList.add('active');
         });
     });
 
-    const usedMinPrice = document.getElementById('usedMinPrice');
-    const usedMaxPrice = document.getElementById('usedMaxPrice');
+    const accMinPrice = document.getElementById('accMinPrice');
+    const accMaxPrice = document.getElementById('accMaxPrice');
 
-    function updateUsedMaxPriceOptions() {
-        if (!usedMinPrice || !usedMaxPrice) {
-            return;
-        }
+    function updateAccMaxPriceOptions() {
+        if (!accMinPrice || !accMaxPrice) return;
 
-        const selectedMinPrice = parseInt(usedMinPrice.value, 10) || 0;
-        const selectedMaxPrice = parseInt(usedMaxPrice.value, 10) || 0;
+        const selectedMin = parseInt(accMinPrice.value, 10) || 0;
+        const selectedMax = parseInt(accMaxPrice.value, 10) || 0;
 
-        Array.from(usedMaxPrice.options).forEach(function (option) {
+        Array.from(accMaxPrice.options).forEach(function (option) {
             const optionValue = parseInt(option.value, 10) || 0;
 
-            if (option.value !== '' && selectedMinPrice > 0 && optionValue <= selectedMinPrice) {
+            if (option.value !== '' && selectedMin > 0 && optionValue <= selectedMin) {
                 option.disabled = true;
-                option.classList.add('price-option-disabled');
             } else {
                 option.disabled = false;
-                option.classList.remove('price-option-disabled');
             }
         });
 
-        if (selectedMaxPrice > 0 && selectedMaxPrice <= selectedMinPrice) {
-            usedMaxPrice.value = '';
+        if (selectedMax > 0 && selectedMax <= selectedMin) {
+            accMaxPrice.value = '';
         }
     }
 
-    if (usedMinPrice) {
-        usedMinPrice.addEventListener('change', function () {
-            updateUsedMaxPriceOptions();
-        });
+    if (accMinPrice) {
+        accMinPrice.addEventListener('change', updateAccMaxPriceOptions);
     }
 
-    updateUsedMaxPriceOptions();
+    updateAccMaxPriceOptions();
 
     /* ========== Compact filter modal ========== */
     (function () {
@@ -1783,7 +1386,6 @@ include 'header.php';
         const applyBtn = document.getElementById('ubuggyApplyFilter');
         const clearBtn = document.getElementById('ubuggyClearFilter');
         const mainForm = document.getElementById('ubuggyMainForm');
-
         if (!overlay || !openBtn) return;
 
         // Disable Max options that are <= Min (and reset Max if it becomes invalid)
@@ -1802,12 +1404,10 @@ include 'header.php';
         if (ubMin) ubMin.addEventListener('change', updateUbuggyMaxOptions);
         updateUbuggyMaxOptions();
 
-        // Open / close
         openBtn.addEventListener('click', () => { overlay.classList.add('active'); document.body.style.overflow = 'hidden'; });
         closeBtn.addEventListener('click', () => { overlay.classList.remove('active'); document.body.style.overflow = ''; });
         overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.classList.remove('active'); document.body.style.overflow = ''; } });
 
-        // Chip groups (single-select)
         document.querySelectorAll('.ubuggy-fl-chips').forEach(group => {
             group.addEventListener('click', (e) => {
                 const chip = e.target.closest('.ubuggy-chip');
@@ -1829,34 +1429,21 @@ include 'header.php';
             const max  = document.getElementById('ubuggyMaxPrice');
             document.getElementById('ubuggyMinPriceHidden').value = min ? min.value : '';
             document.getElementById('ubuggyMaxPriceHidden').value = max ? max.value : '';
-            document.getElementById('ubuggySeatsHidden').value    = getSelected('seats-chip');
-            document.getElementById('ubuggyBrandHidden').value    = getSelected('brand-chip');
-            document.getElementById('ubuggyYearHidden').value     = getSelected('year-chip');
-            document.getElementById('ubuggySortHidden').value     = getSelected('sort-chip') || 'newest';
+            document.getElementById('ubuggyCategoryHidden').value = getSelected('category-chip');
         }
 
-        // Active filter count
         function updateFilterCount() {
             let count = 0;
             if (document.getElementById('ubuggyMinPriceHidden').value) count++;
             if (document.getElementById('ubuggyMaxPriceHidden').value) count++;
-            if (document.getElementById('ubuggySeatsHidden').value)    count++;
-            if (document.getElementById('ubuggyBrandHidden').value)    count++;
-            if (document.getElementById('ubuggyYearHidden').value)     count++;
-            if (document.getElementById('ubuggySortHidden').value && document.getElementById('ubuggySortHidden').value !== 'newest') count++;
+            if (document.getElementById('ubuggyCategoryHidden').value) count++;
             const badge = document.getElementById('ubuggyFilterCount');
             if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
             else           { badge.style.display = 'none'; }
         }
         updateFilterCount();
 
-        // Apply: sync hidden inputs and submit main form
-        applyBtn.addEventListener('click', () => {
-            syncHidden();
-            mainForm.submit();
-        });
-
-        // Clear: reset chips + price selects + submit
+        applyBtn.addEventListener('click', () => { syncHidden(); mainForm.submit(); });
         clearBtn.addEventListener('click', () => {
             document.querySelectorAll('.ubuggy-fl-chips').forEach(group => {
                 group.querySelectorAll('.ubuggy-chip').forEach(c => c.classList.remove('active'));
@@ -1874,7 +1461,7 @@ include 'header.php';
 
     /* Side ad slider */
     (function () {
-        const slider = document.getElementById('usedSideAdSlider');
+        const slider = document.getElementById('accSideAdSlider');
         if (!slider) return;
         const slides = slider.querySelectorAll('.side-ad-slide');
         const dots   = slider.querySelectorAll('.side-ad-dot');
@@ -1905,3 +1492,5 @@ include 'header.php';
 </script>
 
 <?php include 'footer.php'; ?>
+
+
