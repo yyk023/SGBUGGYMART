@@ -4,6 +4,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once '../includes/db.php';
+require_once '../includes/mailer.php';
 
 function redirectWithError($mode, $error, $formData = [])
 {
@@ -36,13 +37,7 @@ function sendMemberVerificationEmail($toEmail, $toName, $token)
         . "Best regards,\n"
         . "SGBUGGYMART Team";
 
-    $headers  = "From: noreply@sgbuggymart.com\r\n";
-    $headers .= "Reply-To: noreply@sgbuggymart.com\r\n";
-    $headers .= "MIME-Version: 1.0\r\n";
-    $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
-    $headers .= "X-Mailer: PHP/" . phpversion();
-
-    return mail($toEmail, $subject, $body, $headers);
+    return sgbm_send_mail($toEmail, $toName, $subject, $body);
 }
 
 $action = $_POST['action'] ?? '';

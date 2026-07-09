@@ -70,7 +70,7 @@ $serialNumber    = $item['serial_number'] ?? '';
 $leadTime        = $item['lead_time'] ?? '';
 $manufactureYear = $item['manufacture_year'] ?? '';
 
-$sgbuggymartWhatsapp = '6598280634';
+$sgbuggymartWhatsapp = '6566624140';
 $cleanWhatsapp       = preg_replace('/[^0-9]/', '', $sgbuggymartWhatsapp);
 $whatsappMessage     = rawurlencode('Hi SGBUGGYMART, I am interested in this accessory: ' . $title);
 $whatsappLink        = $cleanWhatsapp !== ''

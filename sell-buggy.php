@@ -19,7 +19,7 @@ require_once 'includes/db.php';
     Format must be country code + number, without + or spaces.
     Example Malaysia: 60123456789
 */
-$whatsappNumber = '6598280634';
+$whatsappNumber = '6566624140';
 
 $sellBuggyBanners = [];
 try {

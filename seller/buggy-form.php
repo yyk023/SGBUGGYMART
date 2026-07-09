@@ -238,7 +238,17 @@ try {
 }
 $brandOptions[] = 'Others';
 
-$categoryOptions = ['2 seater', '3 seater', '4 seater', '6 seater', '8 seater'];
+$categoryOptions = [
+    '2 Seater',
+    '2 Seater Short Box',
+    '2 Seater Long Box',
+    '4 Seater',
+    '4 Seater Facing Front',
+    '4 Seater Short Box',
+    '6 Seater',
+    '6 Seater Facing Front',
+    '8 Seater',
+];
 
 $defaultRemark = '';
 if (!$isEdit) {

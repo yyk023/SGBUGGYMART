@@ -127,7 +127,7 @@ $tag = $buggy['tag'] ?? '';
 | Seller name, seller phone, seller WhatsApp and internal remark are not shown publicly.
 |--------------------------------------------------------------------------
 */
-$sgbuggymartWhatsapp = '6598280634';
+$sgbuggymartWhatsapp = '6566624140';
 $cleanWhatsapp = preg_replace('/[^0-9]/', '', $sgbuggymartWhatsapp);
 
 $whatsappMessage = rawurlencode(

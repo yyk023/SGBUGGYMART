@@ -42,12 +42,15 @@ try {
 $brandOptions[] = 'Others';
 
 $categoryOptions = [
-    '2 seater',
-    '4 seater',
-    '6 seater',
-    '8 seater',
-    'Industrial',
-    'Cleaning'
+    '2 Seater',
+    '2 Seater Short Box',
+    '2 Seater Long Box',
+    '4 Seater',
+    '4 Seater Facing Front',
+    '4 Seater Short Box',
+    '6 Seater',
+    '6 Seater Facing Front',
+    '8 Seater',
 ];
 
 $statusOptions = [

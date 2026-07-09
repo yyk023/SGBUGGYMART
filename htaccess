@@ -1,4 +1,27 @@
 
+# ============================================================
+# Clean URLs — hide .php extension everywhere
+# ============================================================
+RewriteEngine On
+
+# 1) Redirect direct requests for .php URLs → clean URL (301 permanent)
+#    e.g. /allbuggy.php → /allbuggy
+#         /admin/login.php → /admin/login
+#    IMPORTANT: only apply to GET requests. 301 on POST would strip form data.
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+([^\s]+?)\.php[\s?] [NC]
+RewriteRule ^ /%1 [R=301,L,QSA]
+
+# 2) Internally map clean URL → .php file
+#    e.g. /allbuggy → allbuggy.php
+#         /admin/login → admin/login.php
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME}\.php -f
+RewriteRule ^(.+?)/?$ $1.php [L,QSA]
+
+# ============================================================
+
 # php -- BEGIN cPanel-generated handler, do not edit
 # Set the “ea-php72” package as the default “PHP” programming language.
 <IfModule mime_module>
