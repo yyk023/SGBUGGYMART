@@ -10,10 +10,6 @@ if (!isset($_SESSION['admin_id'])) {
     exit;
 }
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 $success = '';
 $error = '';
 $activeTab = 'productInfoTab';
@@ -1486,7 +1482,7 @@ include 'header.php';
             </div>
 
             <div class="form-group">
-                <label>Buggy Model *</label>
+                <label>Product Name *</label>
                 <input
                     type="text"
                     name="model"

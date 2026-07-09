@@ -71,18 +71,22 @@ $conditionFilter = $_GET['buggy_condition']      ?? '';
 
 $sql    = "
     SELECT
-        id, brand, model, name, seats, listing_type,
-        buggy_condition, selling_price, image_url,
-        tag, brand_tag, status, owner_type, created_at,
-        sort_new, sort_used, serial_number
-    FROM buggies
+        b.id, b.brand, b.model, b.name, b.seats, b.listing_type,
+        b.buggy_condition, b.selling_price, b.image_url,
+        b.tag, b.brand_tag, b.status, b.owner_type, b.created_at,
+        b.sort_new, b.sort_used, b.serial_number,
+        s.full_name AS seller_name
+    FROM buggies b
+    LEFT JOIN sellers s
+        ON s.id = b.owner_id AND b.owner_type = 'seller'
     WHERE 1 = 1
 ";
 $params = [];
 
 if ($keyword !== '') {
-    $sql .= " AND (brand LIKE ? OR model LIKE ? OR name LIKE ? OR tag LIKE ? OR brand_tag LIKE ? OR serial_number LIKE ?)";
+    $sql .= " AND (b.brand LIKE ? OR b.model LIKE ? OR b.name LIKE ? OR b.tag LIKE ? OR b.brand_tag LIKE ? OR b.serial_number LIKE ? OR s.full_name LIKE ?)";
     $like     = '%' . $keyword . '%';
+    $params[] = $like;
     $params[] = $like;
     $params[] = $like;
     $params[] = $like;
@@ -92,22 +96,78 @@ if ($keyword !== '') {
 }
 
 if ($status !== 'all') {
-    $sql .= " AND status = ?";
+    $sql .= " AND b.status = ?";
     $params[] = $status;
 }
 
 if ($ownerFilter !== 'all') {
-    $sql .= " AND owner_type = ?";
+    $sql .= " AND b.owner_type = ?";
     $params[] = $ownerFilter;
 }
 
 if ($conditionFilter !== '' && in_array($conditionFilter, ['new', 'used'], true)) {
-    $sql .= " AND buggy_condition = ?";
+    $sql .= " AND b.buggy_condition = ?";
     $params[] = $conditionFilter;
 }
 
-$sql .= " AND (listing_type = 'sale' OR listing_type = '' OR listing_type IS NULL)";
-$sql .= " ORDER BY created_at DESC, id DESC";
+$sql .= " AND (b.listing_type = 'sale' OR b.listing_type = '' OR b.listing_type IS NULL)";
+
+/* ==== CSV export ==== */
+if (isset($_GET['export']) && $_GET['export'] === 'csv') {
+    $exportSql = $sql . " ORDER BY b.created_at DESC, b.id DESC";
+    try {
+        $exportStmt = $pdo->prepare($exportSql);
+        $exportStmt->execute($params);
+        $rows = $exportStmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $rows = [];
+    }
+
+    $filename = 'products-' . date('Ymd-His') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+
+    $out = fopen('php://output', 'w');
+    // UTF-8 BOM so Excel opens accented characters correctly
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, ['Product Name', 'Serial #', 'Uploaded By', 'Seats', 'Price', 'Listing Status']);
+    foreach ($rows as $r) {
+        $ownerLabel = (($r['owner_type'] ?? '') === 'seller')
+            ? (trim((string)($r['seller_name'] ?? '')) !== '' ? $r['seller_name'] : 'Seller')
+            : 'Admin';
+        $priceVal   = (float)($r['selling_price'] ?? 0);
+        $priceCell  = $priceVal > 0 ? number_format($priceVal, 2, '.', '') : '';
+
+        fputcsv($out, [
+            (string)($r['model']         ?? ''),
+            (string)($r['serial_number'] ?? ''),
+            $ownerLabel,
+            (string)($r['seats']         ?? ''),
+            $priceCell,
+            ucfirst((string)($r['status'] ?? '')),
+        ]);
+    }
+    fclose($out);
+    exit;
+}
+
+/* Pagination */
+$page    = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 20;
+
+$countSql = preg_replace('/^\s*SELECT[\s\S]*?FROM\s/', 'SELECT COUNT(*) FROM ', $sql, 1);
+try {
+    $countStmt = $pdo->prepare($countSql);
+    $countStmt->execute($params);
+    $totalCount = (int)$countStmt->fetchColumn();
+} catch (PDOException $e) {
+    $totalCount = 0;
+}
+$totalPages = max(1, (int)ceil($totalCount / $perPage));
+if ($page > $totalPages) $page = $totalPages;
+$offset = ($page - 1) * $perPage;
+
+$sql .= " ORDER BY b.created_at DESC, b.id DESC LIMIT $perPage OFFSET $offset";
 
 try {
     $stmt = $pdo->prepare($sql);
@@ -116,6 +176,12 @@ try {
 } catch (PDOException $e) {
     $products = [];
     $error = 'Failed to load products: ' . $e->getMessage();
+}
+
+function pageUrl($pageNum) {
+    $qs = array_filter($_GET, function ($v) { return $v !== '' && $v !== null; });
+    $qs['page'] = $pageNum;
+    return '?' . http_build_query($qs);
 }
 
 /* Count how many advanced filters are currently active (for the badge) */
@@ -465,7 +531,20 @@ include 'header.php';
         <h1>Product List</h1>
         <p>Manage buggy information, selling price, image, brand, status and details.</p>
     </div>
-    <a href="product-form.php" class="btn">+ Add Product</a>
+    <div style="display:flex;gap:10px;">
+        <?php
+            $exportQs = array_filter($_GET, function ($v) { return $v !== '' && $v !== null; });
+            $exportQs['export'] = 'csv';
+            unset($exportQs['page']);
+        ?>
+        <a href="?<?php echo e(http_build_query($exportQs)); ?>"
+           class="btn"
+           style="background:#16a34a;"
+           title="Download the currently filtered products as an Excel-compatible CSV file">
+            &#128190; Export to Excel
+        </a>
+        <a href="product-form.php" class="btn">+ Add Product</a>
+    </div>
 </div>
 
 <?php if ($message !== ''): ?>
@@ -543,7 +622,12 @@ include 'header.php';
 <div class="table-card">
     <div class="table-top">
         <strong>Products</strong>
-        <span><?php echo count($products); ?> item(s) found</span>
+        <span>
+            <?php echo (int)$totalCount; ?> item(s) found
+            <?php if ($totalPages > 1): ?>
+                &middot; Page <?php echo (int)$page; ?> of <?php echo (int)$totalPages; ?>
+            <?php endif; ?>
+        </span>
     </div>
 
     <?php if (count($products) > 0): ?>
@@ -553,6 +637,7 @@ include 'header.php';
                     <tr>
                         <th>Product</th>
                         <th>Serial #</th>
+                        <th>Uploaded By</th>
                         <th>Brand</th>
                         <th>Condition</th>
                         <th>Seats</th>
@@ -582,13 +667,10 @@ include 'header.php';
                                         onerror="this.src='../images/no-image.png';"
                                     >
                                     <div>
-                                        <div class="product-name"><?php echo e($product['name']); ?></div>
-                                        <div class="product-meta">
-                                            <?php echo e($product['model']); ?>
-                                            <?php if (!empty($product['tag'])): ?>
-                                                &mdash; <?php echo e($product['tag']); ?>
-                                            <?php endif; ?>
-                                        </div>
+                                        <div class="product-name"><?php echo e($product['model']); ?></div>
+                                        <?php if (!empty($product['tag'])): ?>
+                                            <div class="product-meta"><?php echo e($product['tag']); ?></div>
+                                        <?php endif; ?>
                                         <?php if ($isSellerListing): ?>
                                             <span class="badge badge-seller">Seller Upload</span>
                                         <?php endif; ?>
@@ -603,6 +685,19 @@ include 'header.php';
                                     </span>
                                 <?php else: ?>
                                     <span style="color:#999;font-size:13px;">—</span>
+                                <?php endif; ?>
+                            </td>
+
+                            <td>
+                                <?php if ($isSellerListing): ?>
+                                    <?php $ownerLabel = trim((string)($product['seller_name'] ?? '')); ?>
+                                    <span style="display:inline-block;background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;">
+                                        <?php echo e($ownerLabel !== '' ? $ownerLabel : 'Seller'); ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span style="display:inline-block;background:#dbeafe;color:#1e40af;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;">
+                                        Admin
+                                    </span>
                                 <?php endif; ?>
                             </td>
 
@@ -665,10 +760,56 @@ include 'header.php';
                 </tbody>
             </table>
         </div>
+
+        <?php if ($totalPages > 1): ?>
+            <nav class="admin-pagination">
+                <?php if ($page > 1): ?>
+                    <a class="page-link" href="<?php echo e(pageUrl($page - 1)); ?>">&laquo; Prev</a>
+                <?php else: ?>
+                    <span class="page-link is-disabled">&laquo; Prev</span>
+                <?php endif; ?>
+
+                <?php
+                $windowStart = max(1, $page - 2);
+                $windowEnd   = min($totalPages, $page + 2);
+                if ($windowStart > 1): ?>
+                    <a class="page-link" href="<?php echo e(pageUrl(1)); ?>">1</a>
+                    <?php if ($windowStart > 2): ?><span class="page-ellipsis">&hellip;</span><?php endif; ?>
+                <?php endif; ?>
+
+                <?php for ($p = $windowStart; $p <= $windowEnd; $p++): ?>
+                    <?php if ($p === $page): ?>
+                        <span class="page-link is-active"><?php echo (int)$p; ?></span>
+                    <?php else: ?>
+                        <a class="page-link" href="<?php echo e(pageUrl($p)); ?>"><?php echo (int)$p; ?></a>
+                    <?php endif; ?>
+                <?php endfor; ?>
+
+                <?php if ($windowEnd < $totalPages): ?>
+                    <?php if ($windowEnd < $totalPages - 1): ?><span class="page-ellipsis">&hellip;</span><?php endif; ?>
+                    <a class="page-link" href="<?php echo e(pageUrl($totalPages)); ?>"><?php echo (int)$totalPages; ?></a>
+                <?php endif; ?>
+
+                <?php if ($page < $totalPages): ?>
+                    <a class="page-link" href="<?php echo e(pageUrl($page + 1)); ?>">Next &raquo;</a>
+                <?php else: ?>
+                    <span class="page-link is-disabled">Next &raquo;</span>
+                <?php endif; ?>
+            </nav>
+        <?php endif; ?>
     <?php else: ?>
         <div class="empty">No products found.</div>
     <?php endif; ?>
 </div>
+
+<style>
+    .admin-pagination { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; padding: 22px; border-top: 1px solid #e5e5e5; }
+    .admin-pagination .page-link { min-width: 40px; height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid #d8dde4; background: #ffffff; color: #333; font-size: 14px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; transition: 0.2s ease; }
+    .admin-pagination .page-link:hover { border-color: #ef3f4d; color: #ef3f4d; }
+    .admin-pagination .page-link.is-active { background: #ef3f4d; border-color: #ef3f4d; color: #ffffff; }
+    .admin-pagination .page-link.is-disabled { opacity: 0.4; pointer-events: none; }
+    .admin-pagination .page-ellipsis { color: #999; padding: 0 4px; font-weight: 700; }
+</style>
 
 <script>
     // ===================== FILTER MODAL =====================

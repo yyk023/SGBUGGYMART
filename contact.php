@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $body .= "Subject: $subject\n\n";
         $body .= "Message:\n$message\n";
 
-        $headers  = "From: noreply@yhimart.lagenzssb.com\r\n";
+        $headers  = "From: noreply@sgbuggymart.com\r\n";
         $headers .= "Reply-To: $email\r\n";
         $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
 

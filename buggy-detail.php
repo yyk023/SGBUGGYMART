@@ -93,10 +93,12 @@ if (isset($_SESSION['member_id'])) {
     }
 }
 
-$title = !empty($buggy['name'])
-    ? $buggy['name']
-    : trim(($buggy['brand'] ?? '') . ' ' . ($buggy['model'] ?? ''));
-
+$title = trim((string)($buggy['model'] ?? ''));
+if ($title === '') {
+    $title = !empty($buggy['name'])
+        ? $buggy['name']
+        : trim(($buggy['brand'] ?? '') . ' ' . ($buggy['model'] ?? ''));
+}
 if ($title === '') {
     $title = 'Buggy Detail';
 }
@@ -125,7 +127,7 @@ $tag = $buggy['tag'] ?? '';
 | Seller name, seller phone, seller WhatsApp and internal remark are not shown publicly.
 |--------------------------------------------------------------------------
 */
-$sgbuggymartWhatsapp = '6566624140';
+$sgbuggymartWhatsapp = '6598280634';
 $cleanWhatsapp = preg_replace('/[^0-9]/', '', $sgbuggymartWhatsapp);
 
 $whatsappMessage = rawurlencode(
@@ -825,35 +827,41 @@ $filterYearEnd      = $filterYearStart - 15;
         position: absolute;
         top: 50%;
         transform: translateY(-50%);
-        width: 40px;
-        height: 40px;
-        border: none;
-        border-radius: 50%;
-        background: rgba(0, 0, 0, 0.38);
-        color: #fff;
-        font-size: 40px;
-        line-height: 40px;
-        cursor: pointer;
-        z-index: 5;
+
+        width: 42px;
+        height: 42px;
+
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 0 0 4px 0;
-        transition: 0.2s ease;
+
+        border: none;
+        border-radius: 50%;
+
+        background: rgba(0, 0, 0, 0.22);
+        color: #fff;
+
+        font-size: 28px;
+        font-weight: 700;
+        line-height: 1;
+
+        cursor: pointer;
+        z-index: 5;
+
+        padding: 0;
+        transition: background 0.2s ease;
     }
 
     .gallery-arrow:hover {
-        background: rgba(0, 0, 0, 0.58);
+        background: rgba(0, 0, 0, 0.4);
     }
 
     .gallery-arrow.prev {
         left: 16px;
-        padding-right: 3px;
     }
 
     .gallery-arrow.next {
         right: 16px;
-        padding-left: 3px;
     }
 
     .thumb-slider-wrap {
@@ -1499,19 +1507,17 @@ $filterYearEnd      = $filterYearStart - 15;
         .gallery-arrow {
             width: 36px;
             height: 36px;
-            font-size: 34px;
-            line-height: 36px;
-            padding: 0 0 4px 0;
+            font-size: 24px;
+            line-height: 1;
+            padding: 0;
         }
 
         .gallery-arrow.prev {
             left: 10px;
-            padding-right: 3px;
         }
 
         .gallery-arrow.next {
             right: 10px;
-            padding-left: 3px;
         }
 
         .thumb-slider-wrap {
@@ -1892,18 +1898,13 @@ $filterYearEnd      = $filterYearStart - 15;
 
         <table class="detail-table">
             <tr>
-                <th>Buggy Name</th>
+                <th>Product Name</th>
                 <td><?php echo htmlspecialchars($title); ?></td>
             </tr>
 
             <tr>
                 <th>Brand</th>
                 <td><?php echo htmlspecialchars($brand ?: 'N/A'); ?></td>
-            </tr>
-
-            <tr>
-                <th>Model</th>
-                <td><?php echo htmlspecialchars($model ?: 'N/A'); ?></td>
             </tr>
 
             <tr>

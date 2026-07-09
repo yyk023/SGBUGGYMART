@@ -113,10 +113,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['id'
 
 $locationFilter = $_GET['location'] ?? 'all';
 
-$sql    = "SELECT * FROM banners WHERE type = 'banner'";
+/* Banner list only shows the two banner locations (home + sell_buggy).
+   Any side_* locations belong to the Ads page. */
+$bannerLocations = ['home', 'sell_buggy'];
+
+$sql    = "SELECT * FROM banners WHERE type = 'banner' AND location IN ('" . implode("','", $bannerLocations) . "')";
 $params = [];
 
-if ($locationFilter !== 'all') {
+if ($locationFilter !== 'all' && in_array($locationFilter, $bannerLocations, true)) {
     $sql .= " AND location = ?";
     $params[] = $locationFilter;
 }

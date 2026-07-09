@@ -1,9 +1,4 @@
 <?php
-// TEMP DEBUG &mdash; remove after fixing
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 require_once '../includes/db.php';
 require_once '../includes/csrf.php';
 
@@ -94,7 +89,23 @@ if ($categoryFilter !== '') {
     $params[] = $categoryFilter;
 }
 
-$sql .= " ORDER BY created_at DESC, id DESC";
+/* Pagination */
+$page    = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 20;
+
+$countSql = preg_replace('/^SELECT \*/', 'SELECT COUNT(*)', $sql, 1);
+try {
+    $countStmt = $pdo->prepare($countSql);
+    $countStmt->execute($params);
+    $totalCount = (int)$countStmt->fetchColumn();
+} catch (PDOException $e) {
+    $totalCount = 0;
+}
+$totalPages = max(1, (int)ceil($totalCount / $perPage));
+if ($page > $totalPages) $page = $totalPages;
+$offset = ($page - 1) * $perPage;
+
+$sql .= " ORDER BY created_at DESC, id DESC LIMIT $perPage OFFSET $offset";
 
 try {
     $stmt = $pdo->prepare($sql);
@@ -103,6 +114,12 @@ try {
 } catch (PDOException $e) {
     $automotive = [];
     $error = 'Failed to load automotive: ' . $e->getMessage();
+}
+
+function pageUrl($pageNum) {
+    $qs = array_filter($_GET, function ($v) { return $v !== '' && $v !== null; });
+    $qs['page'] = $pageNum;
+    return '?' . http_build_query($qs);
 }
 
 /* Count active advanced filters (for the badge) */
@@ -591,7 +608,12 @@ include 'header.php';
 <div class="table-card">
     <div class="table-top">
         <strong>Automotive List</strong>
-        <span><?php echo count($automotive); ?> record(s) found</span>
+        <span>
+            <?php echo (int)$totalCount; ?> record(s) found
+            <?php if ($totalPages > 1): ?>
+                &middot; Page <?php echo (int)$page; ?> of <?php echo (int)$totalPages; ?>
+            <?php endif; ?>
+        </span>
     </div>
 
     <div class="table-scroll">
@@ -689,7 +711,53 @@ include 'header.php';
             </tbody>
         </table>
     </div>
+
+    <?php if ($totalPages > 1): ?>
+        <nav class="admin-pagination">
+            <?php if ($page > 1): ?>
+                <a class="page-link" href="<?php echo e(pageUrl($page - 1)); ?>">&laquo; Prev</a>
+            <?php else: ?>
+                <span class="page-link is-disabled">&laquo; Prev</span>
+            <?php endif; ?>
+
+            <?php
+            $windowStart = max(1, $page - 2);
+            $windowEnd   = min($totalPages, $page + 2);
+            if ($windowStart > 1): ?>
+                <a class="page-link" href="<?php echo e(pageUrl(1)); ?>">1</a>
+                <?php if ($windowStart > 2): ?><span class="page-ellipsis">&hellip;</span><?php endif; ?>
+            <?php endif; ?>
+
+            <?php for ($p = $windowStart; $p <= $windowEnd; $p++): ?>
+                <?php if ($p === $page): ?>
+                    <span class="page-link is-active"><?php echo (int)$p; ?></span>
+                <?php else: ?>
+                    <a class="page-link" href="<?php echo e(pageUrl($p)); ?>"><?php echo (int)$p; ?></a>
+                <?php endif; ?>
+            <?php endfor; ?>
+
+            <?php if ($windowEnd < $totalPages): ?>
+                <?php if ($windowEnd < $totalPages - 1): ?><span class="page-ellipsis">&hellip;</span><?php endif; ?>
+                <a class="page-link" href="<?php echo e(pageUrl($totalPages)); ?>"><?php echo (int)$totalPages; ?></a>
+            <?php endif; ?>
+
+            <?php if ($page < $totalPages): ?>
+                <a class="page-link" href="<?php echo e(pageUrl($page + 1)); ?>">Next &raquo;</a>
+            <?php else: ?>
+                <span class="page-link is-disabled">Next &raquo;</span>
+            <?php endif; ?>
+        </nav>
+    <?php endif; ?>
 </div>
+
+<style>
+    .admin-pagination { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; padding: 22px; border-top: 1px solid #e5e5e5; }
+    .admin-pagination .page-link { min-width: 40px; height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid #d8dde4; background: #ffffff; color: #333; font-size: 14px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; transition: 0.2s ease; }
+    .admin-pagination .page-link:hover { border-color: #ef3f4d; color: #ef3f4d; }
+    .admin-pagination .page-link.is-active { background: #ef3f4d; border-color: #ef3f4d; color: #ffffff; }
+    .admin-pagination .page-link.is-disabled { opacity: 0.4; pointer-events: none; }
+    .admin-pagination .page-ellipsis { color: #999; padding: 0 4px; font-weight: 700; }
+</style>
 
 <script>
     const responseBox = document.getElementById('responseBox');

@@ -23,7 +23,7 @@ function redirectWithMessage($mode, $message)
 
 function sendVerificationEmail($toEmail, $toName, $token)
 {
-    $verifyUrl = 'https://yhimart.lagenzssb.com/seller/verify-email.php?token=' . urlencode($token);
+    $verifyUrl = 'https://sgbuggymart.com/seller/verify-email.php?token=' . urlencode($token);
 
     $subject = 'Verify Your SGBUGGYMART Seller Account Email';
 
@@ -36,8 +36,8 @@ function sendVerificationEmail($toEmail, $toName, $token)
         . "Best regards,\n"
         . "SGBUGGYMART Team";
 
-    $headers  = "From: noreply@yhimart.lagenzssb.com\r\n";
-    $headers .= "Reply-To: noreply@yhimart.lagenzssb.com\r\n";
+    $headers  = "From: noreply@sgbuggymart.com\r\n";
+    $headers .= "Reply-To: noreply@sgbuggymart.com\r\n";
     $headers .= "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
     $headers .= "X-Mailer: PHP/" . phpversion();

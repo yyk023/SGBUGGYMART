@@ -26,8 +26,8 @@ function receiptPath($path)
 
 function sendSellerEmail($toEmail, $toName, $subject, $body)
 {
-    $headers  = "From: noreply@yhimart.lagenzssb.com\r\n";
-    $headers .= "Reply-To: noreply@yhimart.lagenzssb.com\r\n";
+    $headers  = "From: noreply@sgbuggymart.com\r\n";
+    $headers .= "Reply-To: noreply@sgbuggymart.com\r\n";
     $headers .= "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
     $headers .= "X-Mailer: PHP/" . phpversion();
@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['seller_id'], $_POST['
                         . "Congratulations! Your seller account on SGBUGGYMART has been approved.\n\n"
                         . "Your payment has been verified and your seller account is now active.\n\n"
                         . "You can now log in to your seller dashboard and start uploading your buggy listings:\n"
-                        . "https://yhimart.lagenzssb.com/seller/login.php\n\n"
+                        . "https://sgbuggymart.com/seller/login.php\n\n"
                         . "Important reminders:\n"
                         . "- You can upload up to 10 buggy listings\n"
                         . "- Your listings will go live immediately after upload\n"
@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['seller_id'], $_POST['
                         . "We regret to inform you that your payment verification has been rejected.\n\n"
                         . "Reason: " . $rejectedReason . "\n\n"
                         . "Please log in to your seller account and resubmit your payment details:\n"
-                        . "https://yhimart.lagenzssb.com/seller/login.php\n\n"
+                        . "https://sgbuggymart.com/seller/login.php\n\n"
                         . "If you believe this is an error or need assistance, please contact us.\n\n"
                         . "Best regards,\n"
                         . "SGBUGGYMART Team";
@@ -207,6 +207,57 @@ if ($paymentStatus !== 'all') {
     $params[] = $paymentStatus;
 }
 
+/* ==== CSV export ==== */
+if (isset($_GET['export']) && $_GET['export'] === 'csv') {
+    $exportSql = $sql . " ORDER BY created_at DESC, id DESC";
+    try {
+        $exportStmt = $pdo->prepare($exportSql);
+        $exportStmt->execute($params);
+        $rows = $exportStmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $rows = [];
+    }
+
+    $filename = 'sellers-' . date('Ymd-His') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+
+    $out = fopen('php://output', 'w');
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, ['Full Name', 'Email', 'Contact No', 'Address', 'Seller Status', 'Payment Status', 'Payment Reference', 'Approved At', 'Created At']);
+    foreach ($rows as $r) {
+        fputcsv($out, [
+            (string)($r['full_name']         ?? ''),
+            (string)($r['email']             ?? ''),
+            (string)($r['contact_no']        ?? ''),
+            (string)($r['address']           ?? ''),
+            ucwords(str_replace('_', ' ', (string)($r['seller_status']  ?? ''))),
+            ucwords(str_replace('_', ' ', (string)($r['payment_status'] ?? ''))),
+            (string)($r['payment_reference'] ?? ''),
+            !empty($r['approved_at']) ? date('Y-m-d H:i', strtotime($r['approved_at'])) : '',
+            !empty($r['created_at'])  ? date('Y-m-d H:i', strtotime($r['created_at']))  : '',
+        ]);
+    }
+    fclose($out);
+    exit;
+}
+
+/* Pagination */
+$page    = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 20;
+
+$countSql = preg_replace('/^\s*SELECT[\s\S]*?FROM\s/', 'SELECT COUNT(*) FROM ', $sql, 1);
+try {
+    $countStmt = $pdo->prepare($countSql);
+    $countStmt->execute($params);
+    $totalCount = (int)$countStmt->fetchColumn();
+} catch (PDOException $e) {
+    $totalCount = 0;
+}
+$totalPages = max(1, (int)ceil($totalCount / $perPage));
+if ($page > $totalPages) $page = $totalPages;
+$offset = ($page - 1) * $perPage;
+
 $sql .= "
     ORDER BY
         CASE
@@ -218,6 +269,7 @@ $sql .= "
             ELSE 6
         END,
         created_at DESC, id DESC
+    LIMIT $perPage OFFSET $offset
 ";
 
 try {
@@ -227,6 +279,12 @@ try {
 } catch (PDOException $e) {
     $sellers = [];
     $error = 'Failed to load sellers: ' . $e->getMessage();
+}
+
+function pageUrl($pageNum) {
+    $qs = array_filter($_GET, function ($v) { return $v !== '' && $v !== null; });
+    $qs['page'] = $pageNum;
+    return '?' . http_build_query($qs);
 }
 
 include 'header.php';
@@ -298,6 +356,17 @@ include 'header.php';
         <h1>Seller Approval</h1>
         <p>Review seller accounts, payment references, receipts and approval status.</p>
     </div>
+    <?php
+        $exportQs = array_filter($_GET, function ($v) { return $v !== '' && $v !== null; });
+        $exportQs['export'] = 'csv';
+        unset($exportQs['page']);
+    ?>
+    <a href="?<?php echo e(http_build_query($exportQs)); ?>"
+       class="btn"
+       style="background:#16a34a;"
+       title="Download the currently filtered sellers as an Excel-compatible CSV file">
+        &#128190; Export to Excel
+    </a>
 </div>
 
 <?php if ($message !== ''): ?>
@@ -333,7 +402,12 @@ include 'header.php';
 <div class="table-card">
     <div class="table-top">
         <strong>Sellers</strong>
-        <span><?php echo count($sellers); ?> seller(s) found</span>
+        <span>
+            <?php echo (int)$totalCount; ?> seller(s) found
+            <?php if ($totalPages > 1): ?>
+                &middot; Page <?php echo (int)$page; ?> of <?php echo (int)$totalPages; ?>
+            <?php endif; ?>
+        </span>
     </div>
 
     <?php if (count($sellers) > 0): ?>
@@ -485,9 +559,55 @@ include 'header.php';
                 </tbody>
             </table>
         </div>
+
+        <?php if ($totalPages > 1): ?>
+            <nav class="admin-pagination">
+                <?php if ($page > 1): ?>
+                    <a class="page-link" href="<?php echo e(pageUrl($page - 1)); ?>">&laquo; Prev</a>
+                <?php else: ?>
+                    <span class="page-link is-disabled">&laquo; Prev</span>
+                <?php endif; ?>
+
+                <?php
+                $windowStart = max(1, $page - 2);
+                $windowEnd   = min($totalPages, $page + 2);
+                if ($windowStart > 1): ?>
+                    <a class="page-link" href="<?php echo e(pageUrl(1)); ?>">1</a>
+                    <?php if ($windowStart > 2): ?><span class="page-ellipsis">&hellip;</span><?php endif; ?>
+                <?php endif; ?>
+
+                <?php for ($p = $windowStart; $p <= $windowEnd; $p++): ?>
+                    <?php if ($p === $page): ?>
+                        <span class="page-link is-active"><?php echo (int)$p; ?></span>
+                    <?php else: ?>
+                        <a class="page-link" href="<?php echo e(pageUrl($p)); ?>"><?php echo (int)$p; ?></a>
+                    <?php endif; ?>
+                <?php endfor; ?>
+
+                <?php if ($windowEnd < $totalPages): ?>
+                    <?php if ($windowEnd < $totalPages - 1): ?><span class="page-ellipsis">&hellip;</span><?php endif; ?>
+                    <a class="page-link" href="<?php echo e(pageUrl($totalPages)); ?>"><?php echo (int)$totalPages; ?></a>
+                <?php endif; ?>
+
+                <?php if ($page < $totalPages): ?>
+                    <a class="page-link" href="<?php echo e(pageUrl($page + 1)); ?>">Next &raquo;</a>
+                <?php else: ?>
+                    <span class="page-link is-disabled">Next &raquo;</span>
+                <?php endif; ?>
+            </nav>
+        <?php endif; ?>
     <?php else: ?>
         <div class="empty">No sellers found.</div>
     <?php endif; ?>
 </div>
+
+<style>
+    .admin-pagination { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; padding: 22px; border-top: 1px solid #e5e5e5; }
+    .admin-pagination .page-link { min-width: 40px; height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid #d8dde4; background: #ffffff; color: #333; font-size: 14px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; transition: 0.2s ease; }
+    .admin-pagination .page-link:hover { border-color: #ef3f4d; color: #ef3f4d; }
+    .admin-pagination .page-link.is-active { background: #ef3f4d; border-color: #ef3f4d; color: #ffffff; }
+    .admin-pagination .page-link.is-disabled { opacity: 0.4; pointer-events: none; }
+    .admin-pagination .page-ellipsis { color: #999; padding: 0 4px; font-weight: 700; }
+</style>
 
 <?php include 'footer.php'; ?>

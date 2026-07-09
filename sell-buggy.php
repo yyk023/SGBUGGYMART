@@ -19,23 +19,23 @@ require_once 'includes/db.php';
     Format must be country code + number, without + or spaces.
     Example Malaysia: 60123456789
 */
-$whatsappNumber = '60123456789';
+$whatsappNumber = '6598280634';
 
-$sellBuggyBanner = '';
+$sellBuggyBanners = [];
 try {
     $bannerStmt = $pdo->prepare("
         SELECT image_url FROM banners
         WHERE location = 'sell_buggy' AND status = 'active'
         ORDER BY sort_order ASC, id ASC
-        LIMIT 1
     ");
     $bannerStmt->execute();
-    $bannerRow = $bannerStmt->fetch();
-    if ($bannerRow) $sellBuggyBanner = $bannerRow['image_url'];
+    $sellBuggyBanners = $bannerStmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (Exception $e) {
-    $sellBuggyBanner = '';
+    $sellBuggyBanners = [];
 }
-$sellBuggyBannerFinal = $sellBuggyBanner ?: 'https://touristicenter.com/wp-content/uploads/2017/01/dune-buggy-fuerteventura.jpg';
+$sellBuggyBannerFinal = !empty($sellBuggyBanners)
+    ? $sellBuggyBanners[0]
+    : 'images/no-image.png';
 
 $assistedMessage = urlencode('Hi SGBUGGYMART, I would like help to sell my buggy.');
 $consignmentMessage = urlencode('Hi SGBUGGYMART, I am interested in buggy consignment / trade-in service.');
@@ -809,6 +809,28 @@ include 'header.php';
     </section>
 
 </main>
+
+<script>
+    // Auto-rotate the sell-buggy hero banner every 4 seconds
+    (function () {
+        const banners = <?php echo json_encode($sellBuggyBanners); ?>;
+        if (!Array.isArray(banners) || banners.length <= 1) return;
+
+        const hero = document.querySelector('.sell-hero');
+        if (!hero) return;
+
+        // Add a smooth cross-fade when the background image swaps
+        hero.style.transition = 'background-image 0.8s ease';
+
+        let idx = 0;
+        setInterval(function () {
+            idx = (idx + 1) % banners.length;
+            const url = banners[idx];
+            hero.style.backgroundImage =
+                'linear-gradient(90deg, rgba(3, 22, 56, 0.92), rgba(13, 75, 150, 0.76), rgba(0, 0, 0, 0.36)), url("' + url + '")';
+        }, 4000);
+    })();
+</script>
 
 <?php include 'footer.php'; ?>
 

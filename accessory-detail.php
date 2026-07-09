@@ -70,7 +70,7 @@ $serialNumber    = $item['serial_number'] ?? '';
 $leadTime        = $item['lead_time'] ?? '';
 $manufactureYear = $item['manufacture_year'] ?? '';
 
-$sgbuggymartWhatsapp = '65XXXXXXXX';
+$sgbuggymartWhatsapp = '6598280634';
 $cleanWhatsapp       = preg_replace('/[^0-9]/', '', $sgbuggymartWhatsapp);
 $whatsappMessage     = rawurlencode('Hi SGBUGGYMART, I am interested in this accessory: ' . $title);
 $whatsappLink        = $cleanWhatsapp !== ''
@@ -141,6 +141,55 @@ include 'header.php';
 
     .detail-title { font-size: 22px; font-weight: 800; color: #172033; margin: 0; }
 
+    /* ===== Share button + menu (desktop + mobile) ===== */
+    .share-wrap { position: relative; flex-shrink: 0; }
+    .share-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 16px;
+        border: 1px solid #d8dde4; background: #fff; color: #1f2937;
+        border-radius: 999px; font-size: 14px; font-weight: 700;
+        cursor: pointer; transition: 0.2s ease;
+    }
+    .share-btn:hover { border-color: #3b41c8; color: #3b41c8; }
+    .share-menu {
+        position: absolute; top: calc(100% + 8px); right: 0;
+        min-width: 200px; background: #fff;
+        border: 1px solid #e5e7eb; border-radius: 12px;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+        z-index: 100; padding: 8px;
+        display: none; flex-direction: column; gap: 4px;
+    }
+    .share-menu.active { display: flex; }
+    .share-opt {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px; border-radius: 8px;
+        text-decoration: none; font-size: 14px; font-weight: 700;
+        color: #1f2937; border: 0; background: transparent;
+        cursor: pointer; transition: 0.15s ease;
+        text-align: left; width: 100%;
+    }
+    .share-opt:hover { background: #f3f4f6; }
+    .share-whatsapp { color: #25d366; }
+    .share-copy     { color: #6b7280; }
+    .share-copy.copied { background: #dcfce7 !important; color: #166534; }
+
+    .price-row-mobile { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .share-wrap-mobile { display: none; margin-right: 14px; }
+    .share-icon-btn {
+        width: 48px; height: 48px; border: 0; border-radius: 50%;
+        background: transparent; color: #1f2937; cursor: pointer;
+        display: inline-flex; align-items: center; justify-content: center;
+        transition: 0.2s ease; padding: 0;
+    }
+    .share-icon-btn svg { width: 26px; height: 26px; }
+    .share-icon-btn:hover { background: #f3f4f6; color: #3b41c8; }
+    .share-menu-mobile { right: 0; }
+
+    @media (max-width: 900px) {
+        .detail-title-row .share-wrap:not(.share-wrap-mobile) { display: none; }
+        .share-wrap-mobile { display: block; }
+    }
+
     .detail-tabs {
         display: flex;
         gap: 40px;
@@ -208,19 +257,36 @@ include 'header.php';
 
     .gallery-arrow {
         position: absolute;
-        top: 50%; transform: translateY(-50%);
-        width: 40px; height: 40px;
-        border: none; border-radius: 50%;
-        background: rgba(0,0,0,0.38);
-        color: #fff; font-size: 40px; line-height: 40px;
-        cursor: pointer; z-index: 5;
-        display: flex; align-items: center; justify-content: center;
-        padding: 0 0 4px 0; transition: 0.2s ease;
+        top: 50%;
+        transform: translateY(-50%);
+
+        width: 42px;
+        height: 42px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        border: none;
+        border-radius: 50%;
+
+        background: rgba(0, 0, 0, 0.22);
+        color: #fff;
+
+        font-size: 28px;
+        font-weight: 700;
+        line-height: 1;
+
+        cursor: pointer;
+        z-index: 5;
+
+        padding: 0;
+        transition: background 0.2s ease;
     }
 
-    .gallery-arrow:hover { background: rgba(0,0,0,0.58); }
-    .gallery-arrow.prev { left: 16px; padding-right: 3px; }
-    .gallery-arrow.next { right: 16px; padding-left: 3px; }
+    .gallery-arrow:hover { background: rgba(0, 0, 0, 0.4); }
+    .gallery-arrow.prev { left: 16px; }
+    .gallery-arrow.next { right: 16px; }
 
     .thumb-slider-wrap { position: relative; margin-top: 20px; padding: 0 42px; }
     .thumb-viewport { overflow: hidden; width: 100%; }
@@ -454,7 +520,7 @@ include 'header.php';
     @media (max-width: 520px) {
         .detail-page          { padding: 18px 14px 50px; }
         .detail-title         { font-size: 20px; }
-        .gallery-arrow        { width: 36px; height: 36px; font-size: 34px; }
+        .gallery-arrow        { width: 36px; height: 36px; font-size: 24px; line-height: 1; padding: 0; }
         .gallery-arrow.prev   { left: 10px; }
         .gallery-arrow.next   { right: 10px; }
         .thumb-slider-wrap    { padding: 0 34px; }
@@ -482,6 +548,27 @@ include 'header.php';
 
     <div class="detail-title-row">
         <h1 class="detail-title"><?php echo htmlspecialchars($title); ?></h1>
+
+        <div class="share-wrap">
+            <button type="button" class="share-btn" id="shareBtn" aria-label="Share this accessory">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                </svg>
+                <span>Share</span>
+            </button>
+
+            <div class="share-menu" id="shareMenu">
+                <a class="share-opt share-whatsapp" id="shareWhatsapp" target="_blank" rel="noopener">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 6.32A7.85 7.85 0 0 0 12.05 4a7.94 7.94 0 0 0-6.88 11.9L4 20l4.22-1.1a7.93 7.93 0 0 0 3.82.98h.01a7.94 7.94 0 0 0 5.55-13.56zm-5.55 12.21h-.01a6.6 6.6 0 0 1-3.36-.92l-.24-.14-2.5.66.67-2.44-.16-.25a6.59 6.59 0 1 1 12.23-3.5 6.6 6.6 0 0 1-6.63 6.59z"/></svg>
+                    <span>WhatsApp</span>
+                </a>
+                <button type="button" class="share-opt share-copy" id="shareCopy">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    <span id="shareCopyLabel">Copy Link</span>
+                </button>
+            </div>
+        </div>
     </div>
 
     <nav class="detail-tabs">
@@ -579,12 +666,34 @@ include 'header.php';
                     You save $<?php echo number_format((float)$price - (float)$item['discount_price'], 0); ?>
                 </div>
             <?php else: ?>
-                <div class="price">
-                    <?php if ((float)$price > 0): ?>
-                        $<?php echo number_format((float)$price, 0); ?>
-                    <?php else: ?>
-                        Price on request
-                    <?php endif; ?>
+                <div class="price-row-mobile">
+                    <div class="price">
+                        <?php if ((float)$price > 0): ?>
+                            $<?php echo number_format((float)$price, 0); ?>
+                        <?php else: ?>
+                            Price on request
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="share-wrap share-wrap-mobile">
+                        <button type="button" class="share-icon-btn" id="shareBtnMobile" aria-label="Share">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                            </svg>
+                        </button>
+
+                        <div class="share-menu share-menu-mobile" id="shareMenuMobile">
+                            <a class="share-opt share-whatsapp" id="shareWhatsappMobile" target="_blank" rel="noopener">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 6.32A7.85 7.85 0 0 0 12.05 4a7.94 7.94 0 0 0-6.88 11.9L4 20l4.22-1.1a7.93 7.93 0 0 0 3.82.98h.01a7.94 7.94 0 0 0 5.55-13.56zm-5.55 12.21h-.01a6.6 6.6 0 0 1-3.36-.92l-.24-.14-2.5.66.67-2.44-.16-.25a6.59 6.59 0 1 1 12.23-3.5 6.6 6.6 0 0 1-6.63 6.59z"/></svg>
+                                <span>WhatsApp</span>
+                            </a>
+                            <button type="button" class="share-opt share-copy" id="shareCopyMobile">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                <span id="shareCopyLabelMobile">Copy Link</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="monthly">Contact SGBUGGYMART for best offer</div>
@@ -1032,6 +1141,60 @@ include 'header.php';
     }
 
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSgContactModal(); });
+
+    /* ===== Share button (WhatsApp + Copy Link) — desktop + mobile ===== */
+    (function () {
+        const pageShareUrl = window.location.origin + window.location.pathname + '?id=<?php echo (int)$id; ?>';
+        const pageTitle    = <?php echo json_encode($title); ?>;
+        const shareText    = pageTitle + ' - SGBUGGYMART';
+
+        function bindShare(btnId, menuId, waId, copyId, copyLabelId) {
+            const shareBtn  = document.getElementById(btnId);
+            const shareMenu = document.getElementById(menuId);
+            if (!shareBtn || !shareMenu) return;
+
+            const waLink = document.getElementById(waId);
+            if (waLink) waLink.href = 'https://wa.me/?text=' + encodeURIComponent(shareText + '\n' + pageShareUrl);
+
+            shareBtn.addEventListener('click', async function (e) {
+                e.stopPropagation();
+                if (navigator.share && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+                    try {
+                        await navigator.share({ title: pageTitle, text: shareText, url: pageShareUrl });
+                        return;
+                    } catch (err) { /* fall back to menu */ }
+                }
+                shareMenu.classList.toggle('active');
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!shareMenu.contains(e.target) && e.target !== shareBtn) {
+                    shareMenu.classList.remove('active');
+                }
+            });
+
+            const copyBtn   = document.getElementById(copyId);
+            const copyLabel = document.getElementById(copyLabelId);
+            if (copyBtn && copyLabel) {
+                copyBtn.addEventListener('click', async function () {
+                    try {
+                        await navigator.clipboard.writeText(pageShareUrl);
+                        copyBtn.classList.add('copied');
+                        copyLabel.textContent = '✓ Copied!';
+                        setTimeout(function () {
+                            copyBtn.classList.remove('copied');
+                            copyLabel.textContent = 'Copy Link';
+                        }, 2000);
+                    } catch (err) {
+                        alert('Link: ' + pageShareUrl);
+                    }
+                });
+            }
+        }
+
+        bindShare('shareBtn',       'shareMenu',       'shareWhatsapp',       'shareCopy',       'shareCopyLabel');
+        bindShare('shareBtnMobile', 'shareMenuMobile', 'shareWhatsappMobile', 'shareCopyMobile', 'shareCopyLabelMobile');
+    })();
     window.addEventListener('resize', function () { moveThumbPageToImage(currentImageIndex); });
 
     updateThumbSlider();
