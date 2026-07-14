@@ -160,7 +160,7 @@ try {
 
 $allImages = [];
 
-if (!empty($mainImage)) {
+if (!empty($mainImage) && (count($galleryImages) === 0 || in_array($mainImage, $galleryImages, true))) {
     $allImages[] = $mainImage;
 }
 

@@ -94,7 +94,9 @@ try {
 }
 
 $allImages = [];
-if (!empty($mainImage)) $allImages[] = $mainImage;
+if (!empty($mainImage) && (count($galleryImages) === 0 || in_array($mainImage, $galleryImages, true))) {
+    $allImages[] = $mainImage;
+}
 foreach ($galleryImages as $galleryImage) {
     if (!empty($galleryImage) && !in_array($galleryImage, $allImages, true)) {
         $allImages[] = $galleryImage;

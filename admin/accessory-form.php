@@ -275,8 +275,26 @@ if ($isEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['image_acti
 
         if ($galleryId > 0) {
             try {
+                $stmt = $pdo->prepare("SELECT image_url FROM accessory_images WHERE id = ? AND accessory_id = ?");
+                $stmt->execute([$galleryId, $id]);
+                $removedUrl = (string)$stmt->fetchColumn();
+
                 $stmt = $pdo->prepare("DELETE FROM accessory_images WHERE id = ? AND accessory_id = ?");
                 $stmt->execute([$galleryId, $id]);
+
+                $stmt = $pdo->prepare("SELECT image_url FROM accessories WHERE id = ?");
+                $stmt->execute([$id]);
+                $currentPrimary = (string)$stmt->fetchColumn();
+
+                if ($removedUrl !== '' && trim($currentPrimary) === trim($removedUrl)) {
+                    $stmt = $pdo->prepare("SELECT image_url FROM accessory_images WHERE accessory_id = ? ORDER BY sort_order ASC, id ASC LIMIT 1");
+                    $stmt->execute([$id]);
+                    $nextPrimary = (string)$stmt->fetchColumn();
+
+                    $stmt = $pdo->prepare("UPDATE accessories SET image_url = ? WHERE id = ?");
+                    $stmt->execute([$nextPrimary !== '' ? $nextPrimary : '', $id]);
+                }
+
                 $success = 'Image removed successfully.';
             } catch (PDOException $e) {
                 $error = 'Failed to remove image: ' . $e->getMessage();
