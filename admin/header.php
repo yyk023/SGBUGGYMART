@@ -736,6 +736,15 @@ $isProductBrandPage = $currentPage === 'product-brand.php';
                 </div>
             </div>
 
+            <?php if (($_SESSION['admin_role'] ?? 'super_admin') === 'super_admin'): ?>
+            <a href="admin-accounts.php" class="<?php echo $currentPage === 'admin-accounts.php' ? 'active' : ''; ?>">
+                <span class="menu-label">
+                    <span class="menu-icon">🛡️</span>
+                    <span>Admin Accounts</span>
+                </span>
+            </a>
+            <?php endif; ?>
+
             <a href="../index.php" target="_blank">
                 <span class="menu-label">
                     <span class="menu-icon">🌐</span>

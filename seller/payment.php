@@ -897,7 +897,7 @@ include '../header.php';
 <div class="qr-zoom-overlay" id="qrZoomOverlay">
     <div class="qr-zoom-content">
         <button type="button" class="qr-zoom-close" id="qrZoomClose">&times;</button>
-        <img src="../images/QRPAYMENT.png" alt="SGBUGGYMART Payment QR Code">
+        <img src="../images/YHI_CORPORATION_PAYMENT.jpeg" alt="YHI Corporation (Singapore) Pte Ltd Payment QR Code">
     </div>
 </div>
 

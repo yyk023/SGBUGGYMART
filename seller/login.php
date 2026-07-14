@@ -327,6 +327,10 @@ $oldAddress   = htmlspecialchars($_GET['old_address']    ?? '', ENT_QUOTES, 'UTF
                         Not a seller yet?
                         <a href="login.php?mode=register">Register seller account</a>
                     </div>
+                    <div class="switch-note" style="margin-top:6px;">
+                        Forgot your password?
+                        <a href="forgot-password.php">Reset it here</a>
+                    </div>
                 </form>
             <?php endif; ?>
 

@@ -645,7 +645,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product'])) {
                         tag,
                         brand_tag,
                         status,
-                        datasheet_url
+                        datasheet_url,
+                        is_fleet
                     ) VALUES (
                         :owner_type,
                         :owner_id,
@@ -672,12 +673,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product'])) {
                         :tag,
                         :brand_tag,
                         :status,
-                        :datasheet_url
+                        :datasheet_url,
+                        :is_fleet
                     )
                 ");
 
+                $isFleetListing = (($_SESSION['admin_role'] ?? 'super_admin') === 'seller') ? 1 : 0;
                 $stmt->execute([
                     ':datasheet_url' => $formData['datasheet_url'] !== '' ? $formData['datasheet_url'] : null,
+                    ':is_fleet'   => $isFleetListing,
                     ':owner_type' => 'admin',
                     ':owner_id' => $_SESSION['admin_id'],
                     ':brand' => $brand,
